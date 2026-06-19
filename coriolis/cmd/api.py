@@ -11,11 +11,13 @@ from oslo_reports import opts as gmr_opts
 
 from coriolis import service
 from coriolis import utils
+from coriolis import version
 
 api_opts = [
     cfg.IntOpt(
         'worker_count', min=1, default=processutils.get_worker_count(),
         help='Number of processes in which the service will be running')]
+
 
 CONF = cfg.CONF
 CONF.register_opts(api_opts, 'api')
@@ -23,13 +25,14 @@ CONF.register_opts(api_opts, 'api')
 
 def main():
     worker_count, args = service.get_worker_count_from_args(sys.argv)
-    CONF(args[1:], project='coriolis', version="1.0.0")
+    CONF(args[1:], project='coriolis', version=version.version_string())
     if not worker_count:
         worker_count = CONF.api.worker_count
     utils.setup_logging()
 
     gmr_opts.set_defaults(CONF)
-    gmr.TextGuruMeditation.setup_autorun(version="1.0.0", conf=CONF)
+    gmr.TextGuruMeditation.setup_autorun(
+        version=version.version_string(), conf=CONF)
 
     server = service.WSGIService(
         'coriolis-api', worker_count=worker_count)

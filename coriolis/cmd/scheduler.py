@@ -12,11 +12,13 @@ from coriolis import constants
 from coriolis.scheduler.rpc import server as rpc_server
 from coriolis import service
 from coriolis import utils
+from coriolis import version
 
 scheduler_opts = [
     cfg.IntOpt(
         'worker_count', min=1, default=1,
         help='Number of processes in which the service will be running')]
+
 
 CONF = cfg.CONF
 CONF.register_opts(scheduler_opts, 'scheduler')
@@ -24,11 +26,12 @@ CONF.register_opts(scheduler_opts, 'scheduler')
 
 def main():
     CONF(sys.argv[1:], project='coriolis',
-         version="1.0.0")
+         version=version.version_string())
     utils.setup_logging()
 
     gmr_opts.set_defaults(CONF)
-    gmr.TextGuruMeditation.setup_autorun(version="1.0.0", conf=CONF)
+    gmr.TextGuruMeditation.setup_autorun(
+        version=version.version_string(), conf=CONF)
 
     server = service.MessagingService(
         constants.SCHEDULER_MAIN_MESSAGING_TOPIC,

@@ -13,16 +13,19 @@ from coriolis import service
 from coriolis.transfer_cron.rpc import server as rpc_server
 from coriolis import utils
 
+from coriolis import version
+
 CONF = cfg.CONF
 
 
 def main():
     CONF(sys.argv[1:], project='coriolis',
-         version="1.0.0")
+         version=version.version_string())
     utils.setup_logging()
 
     gmr_opts.set_defaults(CONF)
-    gmr.TextGuruMeditation.setup_autorun(version="1.0.0", conf=CONF)
+    gmr.TextGuruMeditation.setup_autorun(
+        version=version.version_string(), conf=CONF)
 
     server = service.MessagingService(
         constants.TRANSFER_CRON_MAIN_MESSAGING_TOPIC,

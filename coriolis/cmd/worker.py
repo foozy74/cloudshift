@@ -12,6 +12,7 @@ from oslo_reports import opts as gmr_opts
 from coriolis import constants
 from coriolis import service
 from coriolis import utils
+from coriolis import version
 from coriolis.worker.rpc import server as rpc_server
 
 worker_opts = [
@@ -19,19 +20,21 @@ worker_opts = [
         'worker_count', min=1, default=processutils.get_worker_count(),
         help='Number of processes in which the service will be running')]
 
+
 CONF = cfg.CONF
 CONF.register_opts(worker_opts, 'worker')
 
 
 def main():
     worker_count, args = service.get_worker_count_from_args(sys.argv)
-    CONF(args[1:], project='coriolis', version="1.0.0")
+    CONF(args[1:], project='coriolis', version=version.version_string())
     if not worker_count:
         worker_count = CONF.worker.worker_count
     utils.setup_logging()
 
     gmr_opts.set_defaults(CONF)
-    gmr.TextGuruMeditation.setup_autorun(version="1.0.0", conf=CONF)
+    gmr.TextGuruMeditation.setup_autorun(
+        version=version.version_string(), conf=CONF)
 
     server = service.MessagingService(
         constants.WORKER_MAIN_MESSAGING_TOPIC,
