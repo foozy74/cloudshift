@@ -1,58 +1,75 @@
 # C4 Container Diagram
 
-This diagram displays the internal container architecture of CloudShift, showing how the decoupled services communicate via RabbitMQ and read/write metadata in MariaDB.
+This Container diagram details the internal microservices structure of the CloudShift (Coriolis) platform, showing how different services interact asynchronously and how they orchestrate the migration flow.
 
 ```mermaid
 C4Container
-  title Container Diagram - CloudShift Control Plane
+  title Container Diagram for CloudShift
 
-  Person(admin, "Administrator", "Interacts with the web dashboard to manage migrations.")
+  Person(admin, "Migration Administrator", "Enterprise IT Operator or Consultant managing migrations")
 
-  System_Boundary(cloudshift_platform, "CloudShift Platform") {
-    Container(dashboard, "Web Dashboard", "Nginx & Vanilla JS", "Serves the admin web portal and proxies `/v1/` requests to the API.", "8080")
-    Container(api, "API Service", "Python (Paste/Cheroot)", "Exposes the REST API, handles endpoint registration, and queues tasks.", "7667")
+  System_Boundary(cloudshift_system, "CloudShift Platform") {
+    Container(dashboard, "Web Dashboard", "Nginx, Vanilla JS", "Web user interface that exposes endpoint configurations, migration jobs, and logs.")
+    Container(nginx_proxy, "API Gateway / Proxy", "Nginx", "Routes /v1/ requests transparently to the API container, serves Swagger UI documentation.")
+    Container(api_service, "API Service (coriolis-api)", "Python, WSGI/Flask", "Exposes REST API endpoints for migration operations and endpoints management.")
     
-    ContainerDb(db, "Metadata Database", "MariaDB 10", "Stores endpoint details, migration metadata, execution logs, and scheduling records.", "13306")
-    ContainerQueue(rabbitmq, "Message Broker", "RabbitMQ 3", "Enables asynchronous communication between API, Conductor, Scheduler, and Worker services.", "5672")
-
-    Container(conductor, "Conductor", "Python (TaskFlow)", "Coordinates the high-level workflow pipelines (Migration, Replication, OS-Morphing).")
-    Container(scheduler, "Scheduler", "Python", "Routes worker tasks to appropriate execution nodes based on load and region specs.")
-    Container(worker, "Worker", "Python", "Runs actual data transfer, disk snapshotting, and morphing scripts.")
-    Container(minion_manager, "Minion Manager", "Python", "Manages lifecycle and allocations of helper data-minion VMs.")
-    Container(deployer_manager, "Deployer Manager", "Python", "Controls deployment orchestration and OS morphing triggers.")
-    Container(transfer_cron, "Transfer Cron", "Python", "Triggers recurring, scheduled replication jobs.")
+    ContainerDb(database, "Metadata Database", "MariaDB", "Stores endpoint definitions, job states, task executions, and transfer tracking data.")
+    ContainerQueue(message_broker, "Message Broker", "RabbitMQ (Oslo.Messaging)", "Handles asynchronous message passing and work queuing between API, Conductor, and Workers.")
+    
+    Container(conductor, "Conductor (coriolis-conductor)", "Python, TaskFlow", "Stateless orchestration service that coordinates multi-phase migration pipelines.")
+    Container(worker, "Worker (coriolis-worker)", "Python", "Executes data transfer, disk replication, and OS morphing tasks.")
+    Container(scheduler, "Scheduler (coriolis-scheduler)", "Python", "Runs scheduled transfer synchronization tasks.")
+    Container(minion_manager, "Minion Manager (coriolis-minion)", "Python", "Manages the lifecycle of temporary worker minion VMs.")
+    Container(deployer_manager, "Deployer Manager", "Python", "Manages deployment pipelines.")
+    
+    ContainerDb(logs_fs, "Migration Logs Directory", "Filesystem", "Stores per-migration structured log files (*.log) in JSON-Lines format with duration metrics.")
   }
 
-  System_Ext(vsphere, "VMware vSphere", "Source hypervisor API.")
-  System_Ext(olvm, "Oracle OLVM", "Destination hypervisor API.")
-  System_Ext(hyperv, "Microsoft Hyper-V", "Destination WinRM/PowerShell.")
+  System_Ext(vmware, "VMware vSphere", "Source hypervisor management (vCenter/ESXi)")
+  System_Ext(olvm, "Oracle OLVM", "Destination hypervisor management (oVirt Engine)")
+  System_Ext(hyperv, "Microsoft Hyper-V", "Destination hypervisor")
 
-  Rel(admin, dashboard, "Manages migrations", "HTTPS")
-  Rel(dashboard, api, "Proxies REST calls", "HTTP /v1/")
-  Rel(api, db, "Reads/writes metadata", "SQL")
-  Rel(api, rabbitmq, "Queues jobs & publishes events", "AMQP")
+  Container_Boundary(minion_source_boundary, "Source Minion VM (Temporary)") {
+    Container(minion_src, "Source Minion", "Linux VM", "Reads VMDK disks from vSphere Datastore and pipes data to the target minion.")
+  }
+
+  Container_Boundary(minion_target_boundary, "Target Minion VM (Temporary)") {
+    Container(minion_tgt, "Target Minion", "Linux VM, coriolis-writer", "Receives raw chunks on port 6677 and writes them to target disks on OLVM storage.")
+  }
+
+  Rel(admin, dashboard, "Uses", "HTTPS")
+  Rel(admin, nginx_proxy, "Performs API requests / views Swagger docs", "HTTPS")
+  Rel(dashboard, nginx_proxy, "Calls API", "JSON/HTTPS")
+  Rel(nginx_proxy, api_service, "Proxies calls to /v1/", "HTTP/7667")
   
-  Rel(conductor, rabbitmq, "Subscribes to workflows & posts task updates", "AMQP")
-  Rel(scheduler, rabbitmq, "Subscribes to routing events", "AMQP")
-  Rel(worker, rabbitmq, "Subscribes to transfer & morphing queues", "AMQP")
-  Rel(minion_manager, rabbitmq, "Subscribes to minion pool controls", "AMQP")
-  Rel(deployer_manager, rabbitmq, "Subscribes to deployment events", "AMQP")
-  Rel(transfer_cron, rabbitmq, "Publishes schedule triggers", "AMQP")
-
-  Rel(conductor, db, "Tracks workflow state", "SQL")
-  Rel(worker, db, "Updates execution logs & progress status", "SQL")
-
-  Rel(worker, vsphere, "Extracts disks & queries templates", "HTTPS / SOAP")
-  Rel(worker, olvm, "Uploads raw/cow disks & attaches to target", "HTTPS / SDK")
-  Rel(worker, hyperv, "Injects drivers & boots target VM", "WinRM / PowerShell")
+  Rel(api_service, database, "Reads/writes metadata", "SQL/SQLAlchemy")
+  Rel(api_service, message_broker, "Publishes jobs & transfers", "AMQP")
+  
+  Rel(conductor, message_broker, "Subscribes to orchestration queues", "AMQP")
+  Rel(conductor, database, "Updates job records", "SQL/SQLAlchemy")
+  
+  Rel(worker, message_broker, "Subscribes to task queues", "AMQP")
+  Rel(worker, database, "Updates task records", "SQL/SQLAlchemy")
+  Rel(worker, minion_src, "Manages & communicates with", "SSH/22")
+  Rel(worker, minion_tgt, "Manages & communicates with", "SSH/22")
+  
+  Rel(worker, vmware, "Queries metadata & deploys minion", "SOAP/pyvmomi")
+  Rel(worker, olvm, "Provisions networks, VM, & deploys minion", "REST API/ovirt-engine-sdk-python")
+  Rel(worker, hyperv, "Deploys VM & morphs OS", "WinRM/PowerShell")
+  
+  Rel(minion_src, minion_tgt, "Replicates disk chunks", "TCP/6677")
+  
+  Rel(worker, logs_fs, "Writes migration logs & tracks durations to", "File (olvm.migration_log_dir)")
 ```
 
-## Internal Communication Flows
+## Description of Containers
 
-1. **REST API Request**: The user triggers a migration on the Dashboard. Nginx routes it to `cloudshift-api`, which writes the migration record to MariaDB and publishes a start event to RabbitMQ.
-2. **Workflow Orchestration**: `cloudshift-conductor` picks up the start event, initiates a `TaskFlow` engine pipeline, and posts subtasks (e.g. Export, Transfer, Morph) back onto RabbitMQ.
-3. **Task Execution**:
-   - `cloudshift-scheduler` routes the subtask to a specific worker.
-   - `cloudshift-worker` starts execution, calling the VMware API to pull disk contents and sending data to the destination (OLVM or Hyper-V).
-   - If importing to OLVM, `cloudshift-minion-manager` handles creation of the helper data-minion VM to attach and write the incoming disks.
-   - Once transfer finishes, `cloudshift-deployer-manager` triggers OS-morphing (e.g. installing VirtIO drivers on Windows or updating initramfs on RedHat).
+- **Web Dashboard**: An Nginx-hosted Single Page Application (SPA) providing visual status monitoring, target environment mapping, and endpoint administration.
+- **API Gateway (Nginx)**: The entrypoint for all frontend API traffic. Performs reverse proxying and serves Swagger JSON schemas.
+- **API Service (`coriolis-api`)**: A Flask/Paste-based REST service that validates requests, handles authorization, and communicates with the relational database and the queue broker.
+- **Metadata Database (MariaDB)**: A relational database tracking active migrations, schedules, execution configurations, and worker assignments.
+- **Message Broker (RabbitMQ)**: Facilitates inter-container RPC communications and queues migration workloads for concurrency.
+- **Conductor (`coriolis-conductor`)**: Uses Python's TaskFlow library to run the state machines for replica creations, updates, and deployments.
+- **Worker (`coriolis-worker`)**: Performs the heavy-lifting tasks (such as copying disks and applying operating system morphing).
+- **Migration Logs Directory**: Path configured via `olvm.migration_log_dir` (defaults to `/var/log/coriolis/migrations/`) where execution times, stages, and status codes are logged into JSON-Lines documents per migration.
+- **Temporary Minions**: Dedicated lightweight VMs spawned on the hypervisors to read/write disk sectors. Piped together securely on Port 6677.

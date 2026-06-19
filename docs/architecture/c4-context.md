@@ -1,31 +1,31 @@
 # C4 System Context Diagram
 
-This diagram displays the high-level boundaries of the CloudShift migration platform, showing the primary users and external systems it interacts with.
+This System Context diagram provides a high-level overview of the CloudShift (Coriolis) migration engine, its users, and the external virtualization environments it integrates with.
 
 ```mermaid
 C4Context
-  title System Context Diagram - CloudShift Migration Engine
+  title System Context diagram for CloudShift
 
-  Person(admin, "Administrator", "System administrator running VM migrations, managing mappings, and monitoring progress.")
+  Person(admin, "Migration Administrator", "Enterprise IT Operator or Consultant managing the VM migration process")
   
-  System(cloudshift, "CloudShift", "Enterprise Workload Migration as a Service. Manages replication, disk conversion, and OS morphing.")
+  System(cloudshift, "CloudShift (Coriolis)", "Stateless, Oslo-based migration orchestrator that replicates VM disks and adapts operating systems for target hypervisors.")
 
-  System_Ext(vsphere, "VMware vSphere", "Source hypervisor system. CloudShift exports virtual machine disks and metadata from it.")
-  System_Ext(olvm, "Oracle OLVM / oVirt", "Destination hypervisor environment. CloudShift imports disks, configures storage mapping, and provisions target VMs.")
-  System_Ext(hyperv, "Microsoft Hyper-V", "Destination hypervisor. CloudShift deploys migrated VMs directly using WinRM/PowerShell.")
-  System_Ext(keystone, "OpenStack Keystone", "Optional external authentication provider. Houses Barbican secrets client.")
-
-  Rel(admin, cloudshift, "Configures endpoints, schedules transfers, and runs migrations via Web-Dashboard / API")
+  System_Ext(vmware, "VMware vSphere", "Source virtualization platform hosting virtual machines, templates, storage, and networking configurations.")
   
-  Rel(cloudshift, vsphere, "Reads VM metadata and replicates virtual disks", "HTTPS / vSphere Web API")
-  Rel(cloudshift, olvm, "Provisions target VMs and attaches migrated disks", "HTTPS / oVirt SDK")
-  Rel(cloudshift, hyperv, "Imports virtual disks and configures VM properties", "WinRM / PowerShell")
-  Rel(cloudshift, keystone, "Authenticates sessions and retrieves secrets (Barbican)", "HTTPS / OpenStack API")
+  System_Ext(olvm, "Oracle OLVM / oVirt", "Target virtualization platform where migrated workloads are deployed as VMs.")
+  
+  System_Ext(hyperv, "Microsoft Hyper-V", "Target virtualization platform where migrated workloads are deployed via WinRM.")
+
+  Rel(admin, cloudshift, "Configures endpoints, triggers, and monitors migration jobs", "Web Dashboard / REST API / CLI")
+  
+  Rel(cloudshift, vmware, "Exports VM configuration, metadata, and disk data", "vSphere Web Services SDK (SOAP)")
+  Rel(cloudshift, olvm, "Imports VM configuration, provisions networks, and uploads VM disks", "oVirt REST API v4 / KVM SSH")
+  Rel(cloudshift, hyperv, "Imports VM configuration and deploys VMs", "WinRM / PowerShell")
 ```
 
-## Relationships Description
+## Key Interactions
 
-1. **Administrator to CloudShift**: Communicates with the Control Plane using standard HTTP request payloads to manage endpoints, scenario mappings, and view active transfer executions.
-2. **CloudShift to VMware vSphere**: Performs read-only queries to extract virtual machine definitions (CPU, RAM, NICs) and streams disk snapshots during replication.
-3. **CloudShift to Oracle OLVM**: Authenticates with oVirt Engine, creates disk entities on target storage domains, uploads virtual disk layers, and spawns temporary minion VMs to process block/file adjustments.
-4. **CloudShift to Microsoft Hyper-V**: Establishes secure WinRM sessions to run PowerShell scripts on the host to create VHDX files, configure virtual switches, and register imported VMs.
+1. **Migration Administrator**: Interacts with CloudShift via the Web Dashboard, REST API, or CLI to define connection secrets (vCenter/OLVM/Hyper-V credentials), map networks/storage, start migration jobs, and monitor replication progress.
+2. **VMware vSphere (Source)**: CloudShift connects to the vCenter API to query VM properties, extract network details (including VLAN-IDs), and read raw disk data from ESXi datastores.
+3. **Oracle OLVM / oVirt (Destination)**: CloudShift connects to the oVirt Engine API to define virtual machines, provision logical networks and VNIC profiles, and write disk data to destination storage domains.
+4. **Microsoft Hyper-V (Destination)**: CloudShift connects to Hyper-V hosts using secure WinRM connections to construct target VMs, attach converted disks, and configure hypervisor settings.

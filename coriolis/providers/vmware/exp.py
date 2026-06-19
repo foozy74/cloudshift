@@ -144,6 +144,34 @@ class VMwareVSphereExportProvider(
         """Liest den Netzwerk-Namen aus einem Network-Objekt."""
         return network.name if network else "unknown"
 
+    def _get_vlan_id(self, device):
+        """Liest die numerische VLAN-ID aus einem VirtualEthernetCard-Gerät.
+
+        Unterstützt:
+          - DVS-Portgroups (DistributedVirtualPortgroup): liest vlanId aus
+            defaultPortConfig.
+          - Standard-Portgroups (Network): keine VLAN-ID verfügbar → gibt 0
+            zurück (untagged).
+
+        :param device: vim.vm.device.VirtualEthernetCard
+        :returns: int VLAN-ID (0 = untagged) oder None wenn nicht lesbar
+        """
+        try:
+            from pyVmomi import vim
+            backing = device.backing
+            dv_backing_cls = (
+                vim.vm.device.VirtualEthernetCard.
+                DistributedVirtualPortBackingInfo)
+            if isinstance(backing, dv_backing_cls):
+                portgroup_key = backing.port.portgroupKey
+                # backing.port hat keine direkte Referenz auf das PG-Obj.
+                # Key wird in get_replica_instance_info aufgeloest.
+                return portgroup_key  # wird unten zu int aufgelöst
+            # Standard-Portgroup: kein VLAN-Tag → untagged
+            return 0
+        except Exception:
+            return None
+
     # ------------------------------------------------------------------
     # BaseEndpointProvider
     # ------------------------------------------------------------------
@@ -341,6 +369,27 @@ class VMwareVSphereExportProvider(
         si = self._get_vcenter_session(connection_info)
         vm = self._find_vm_by_name(si, instance_name)
 
+        # Portgroup-Key → VLAN-ID Mapping vorab aufbauen (DVSwitch-Netzwerke)
+        portgroup_vlan_map = {}
+        try:
+            content = si.RetrieveContent()
+            pg_view = content.viewManager.CreateContainerView(
+                content.rootFolder,
+                [vim.dvs.DistributedVirtualPortgroup],
+                True)
+            for pg in pg_view.view:
+                try:
+                    vlan_cfg = pg.config.defaultPortConfig.vlan
+                    # VmwareDistributedVirtualSwitchVlanIdSpec
+                    vlan_id = getattr(vlan_cfg, 'vlanId', 0)
+                    portgroup_vlan_map[pg.key] = int(vlan_id) \
+                        if isinstance(vlan_id, int) else 0
+                except Exception:
+                    portgroup_vlan_map[pg.key] = 0
+            pg_view.Destroy()
+        except Exception as pg_err:
+            LOG.debug("Could not build portgroup VLAN map: %s", pg_err)
+
         disks = []
         nics = []
         cdroms = []
@@ -366,17 +415,26 @@ class VMwareVSphereExportProvider(
             elif isinstance(device, vim.vm.device.VirtualEthernetCard):
                 network_name = None
                 network_id = None
+                vlan_id = 0  # default: untagged
                 if device.backing:
                     net_obj = getattr(device.backing, 'network', None)
                     if net_obj:
                         network_name = net_obj.name
                     network_id = getattr(
                         device.backing, 'deviceName', None)
+                    # DVS-Portgroup: VLAN-ID über pre-built map
+                    if isinstance(
+                            device.backing,
+                            vim.vm.device.VirtualEthernetCard
+                            .DistributedVirtualPortBackingInfo):
+                        pg_key = device.backing.port.portgroupKey
+                        vlan_id = portgroup_vlan_map.get(pg_key, 0)
                 nics.append({
                     "id": f"nic-{device.key}",
                     "name": device.deviceInfo.label,
                     "network_name": network_name,
                     "network_id": network_id,
+                    "vlan_id": vlan_id,
                     "mac_address": getattr(
                         device, 'macAddress', None),
                     "unit_number": str(getattr(

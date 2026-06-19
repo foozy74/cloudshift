@@ -10,6 +10,7 @@ from oslo_log import log as logging
 from coriolis import exception
 from coriolis.providers import backup_writers
 from coriolis.providers import base
+from coriolis.providers.olvm import migration_log as mlog_mod
 from coriolis.providers import provider_utils
 
 LOG = logging.getLogger(__name__)
@@ -32,6 +33,9 @@ olvm_opts = [
     cfg.StrOpt('minion_ssh_key_path',
                default=None,
                help='Path to SSH private key for minion access'),
+    cfg.StrOpt('migration_log_dir',
+               default='/var/log/coriolis/migrations',
+               help='Directory for per-migration JSON-Lines log files'),
 ]
 CONF.register_opts(olvm_opts, group='olvm')
 
@@ -118,7 +122,7 @@ class OLVMoVirtImportProvider(
         return None
 
     def _resolve_target_environment(self, conn, target_environment):
-        """Resolves cluster_id and storage_domain_id in place."""
+        """Resolves cluster_id, storage_domain_id, and datacenter_id."""
         if not target_environment:
             return
         cluster_id = target_environment.get("cluster_id")
@@ -127,10 +131,118 @@ class OLVMoVirtImportProvider(
             resolved = self._find_cluster(conn, cluster_id)
             if resolved:
                 target_environment["cluster_id"] = resolved.id
+                # Datacenter-ID aus Cluster ableiten (für auto-networks)
+                if getattr(resolved, "data_center", None):
+                    target_environment.setdefault(
+                        "datacenter_id", resolved.data_center.id)
         if sd_id:
             resolved = self._find_storage_domain(conn, sd_id)
             if resolved:
                 target_environment["storage_domain_id"] = resolved.id
+
+    def _ensure_network_and_vnic_profile(
+            self, conn, datacenter_id, cluster_id, network_name, vlan_id):
+        """Stellt sicher, dass ein logisches Netzwerk + VNIC-Profil auf OLVM
+        existieren, und gibt die VNIC-Profil-ID zurück.
+
+        Ablauf:
+          1. Logisches Netzwerk suchen (nach Name).
+          2. Falls nicht vorhanden: anlegen und an Datacenter + Cluster hängen.
+          3. Falls vorhanden aber mit abweichender VLAN-ID: Fehler werfen.
+          4. VNIC-Profil für das Netzwerk suchen oder anlegen.
+
+        :param conn: aktive oVirt-Verbindung
+        :param datacenter_id: ID des Datacenters
+        :param cluster_id: ID des Clusters
+        :param network_name: gewünschter Netzwerkname
+        :param vlan_id: numerische VLAN-ID (0 = untagged, None = untagged)
+        :returns: VNIC-Profil-ID (str)
+        :raises exception.InvalidInput: bei VLAN-ID-Konflikt
+        """
+        import ovirtsdk4 as sdk
+
+        effective_vlan_id = vlan_id if vlan_id else 0
+        system = conn.system_service()
+        networks_svc = system.networks_service()
+        vnic_profiles_svc = system.vnic_profiles_service()
+
+        # --- 1. Logisches Netzwerk suchen ---
+        existing = networks_svc.list(search="name=%s" % network_name)
+        network_obj = None
+        for n in existing:
+            if n.name == network_name:
+                network_obj = n
+                break
+
+        if network_obj:
+            # --- 3. VLAN-ID-Konfliktprüfung ---
+            existing_vlan = 0
+            if network_obj.vlan and network_obj.vlan.id is not None:
+                existing_vlan = int(network_obj.vlan.id)
+            if existing_vlan != effective_vlan_id:
+                raise exception.InvalidInput(
+                    "Network '%s' already exists on OLVM with VLAN-ID %d, "
+                    "but source requires VLAN-ID %d. "
+                    "Please resolve the conflict manually before migrating."
+                    % (network_name, existing_vlan, effective_vlan_id))
+            LOG.info(
+                "Network '%s' (VLAN %d) already exists on OLVM (id=%s).",
+                network_name, effective_vlan_id, network_obj.id)
+        else:
+            # --- 2. Logisches Netzwerk anlegen ---
+            LOG.info(
+                "Creating logical network '%s' with VLAN-ID %d ...",
+                network_name, effective_vlan_id)
+            vlan_spec = sdk.types.Vlan(id=effective_vlan_id) \
+                if effective_vlan_id else None
+            network_obj = networks_svc.add(
+                network=sdk.types.Network(
+                    name=network_name,
+                    data_center=sdk.types.DataCenter(id=datacenter_id),
+                    vlan=vlan_spec,
+                    usages=[
+                        sdk.types.NetworkUsage.VM,
+                    ],
+                )
+            )
+            LOG.info(
+                "Logical network '%s' created (id=%s).",
+                network_name, network_obj.id)
+
+            # Netzwerk an Cluster anhängen
+            cluster_networks_svc = (
+                system.clusters_service()
+                .cluster_service(cluster_id)
+                .networks_service())
+            cluster_networks_svc.add(
+                network=sdk.types.Network(id=network_obj.id)
+            )
+            LOG.info(
+                "Network '%s' attached to cluster %s.",
+                network_name, cluster_id)
+
+        # --- 4. VNIC-Profil suchen oder anlegen ---
+        for p in vnic_profiles_svc.list():
+            if p.network and p.network.id == network_obj.id \
+                    and p.name == network_name:
+                LOG.debug(
+                    "Reusing existing VNIC profile '%s' (id=%s).",
+                    p.name, p.id)
+                return p.id
+
+        LOG.info(
+            "Creating VNIC profile '%s' for network %s ...",
+            network_name, network_obj.id)
+        vnic_profile = vnic_profiles_svc.add(
+            profile=sdk.types.VnicProfile(
+                name=network_name,
+                network=sdk.types.Network(id=network_obj.id),
+            )
+        )
+        LOG.info(
+            "VNIC profile '%s' created (id=%s).",
+            network_name, vnic_profile.id)
+        return vnic_profile.id
 
     def _wait_for_vm_up(self, vms_service, vm_id, timeout=300):
         """Wartet bis die VM den 'up' Status erreicht hat."""
@@ -415,12 +527,29 @@ class OLVMoVirtImportProvider(
     # ------------------------------------------------------------------
 
     def get_networks(self, ctxt, connection_info, env):
+        """Listet alle logischen Netzwerke inklusive VLAN-ID zurück."""
         conn = self._get_ovirt_connection(connection_info)
         try:
-            return [
-                {"id": n.id, "name": n.name}
-                for n in conn.system_service().networks_service().list()
-            ]
+            result = []
+            for n in conn.system_service().networks_service().list():
+                vlan_id = None
+                if n.vlan and n.vlan.id is not None:
+                    vlan_id = int(n.vlan.id)
+                datacenter_name = None
+                try:
+                    if n.data_center:
+                        dc = conn.follow_link(n.data_center)
+                        datacenter_name = dc.name if dc else None
+                except Exception:
+                    pass
+                entry = {"id": n.id, "name": n.name}
+                if vlan_id is not None or datacenter_name:
+                    entry["additional_provider_properties"] = {
+                        "vlan_id": vlan_id,
+                        "datacenter": datacenter_name,
+                    }
+                result.append(entry)
+            return result
         finally:
             conn.close()
 
@@ -884,130 +1013,165 @@ class OLVMoVirtImportProvider(
                                 target_environment, instance_name,
                                 export_info, volumes_info, clone_disks):
         """Erstellt die finale Ziel-VM aus den replizierten Disks."""
-        import ovirtsdk4 as sdk
-
         conn = self._get_ovirt_connection(connection_info)
+        mlog = mlog_mod.MigrationLogger(
+            instance_name,
+            log_dir=CONF.olvm.migration_log_dir)
         try:
-            self._resolve_target_environment(conn, target_environment)
-            vms_service = conn.system_service().vms_service()
-            cluster_id = target_environment["cluster_id"]
-
-            memory_mb = export_info.get("memory_mb", 4096)
-            vcpus = export_info.get("num_cpu", 2)
-
-            # NICs konfigurieren (via network_map)
-            target_nics = []
-            network_map = target_environment.get("network_map", {})
-            for nic in export_info.get("devices", {}).get("nics", []):
-                src_net = nic.get("network_name") or nic.get("network_id")
-                dst_net = None
-                if src_net:
-                    dst_net = network_map.get(src_net)
-                if not dst_net:
-                    # Fallback to string "None" or look up default in map
-                    dst_net = (
-                        network_map.get("None") or
-                        network_map.get("none"))
-                if not dst_net and network_map:
-                    # Robust fallback to first value in the map
-                    dst_net = list(network_map.values())[0]
-
-                # Clean the NIC name: only alphanumeric, -_..
-                raw_nic_name = nic.get("name", "nic-0")
-                nic_name = "".join(
-                    c if c.isalnum() or c in "-_." else "_"
-                    for c in raw_nic_name)[:15]
-
-                if dst_net:
-                    target_nics.append(
-                        sdk.types.Nic(
-                            name=nic_name,
-                            interface=sdk.types.NicInterface.VIRTIO,
-                            vnic_profile=sdk.types.VnicProfile(
-                                id=dst_net),
-                        )
-                    )
-                else:
-                    # Fallback if no network map was provided
-                    target_nics.append(
-                        sdk.types.Nic(
-                            name=nic_name,
-                            interface=sdk.types.NicInterface.VIRTIO,
-                        )
-                    )
-
-            # Firmware-Typ
-            firmware = sdk.types.BiosType.I440FX_SEA_BIOS
-            if export_info.get("firmware_type") == "EFI":
-                firmware = sdk.types.BiosType.Q35_SEA_BIOS
-
-            # VM erstellen
-            oVirt_vm = vms_service.add(
-                vm=sdk.types.Vm(
-                    name=instance_name[:64],
-                    cluster=sdk.types.Cluster(id=cluster_id),
-                    template=sdk.types.Template(name="Blank"),
-                    cpu=sdk.types.Cpu(
-                        topology=sdk.types.CpuTopology(
-                            cores=vcpus,
-                            sockets=1,
-                        )
-                    ),
-                    memory=memory_mb * 1024 * 1024,
-                    os=sdk.types.OperatingSystem(
-                        type=self._detect_os_type(export_info).upper(),
-                    ),
-                    bios=sdk.types.Bios(
-                        type=firmware
-                    ),
-                    type=sdk.types.VmType.SERVER,
-                    nics=target_nics,
-                )
-            )
-
-            # Add target NICs
-            vm_service = vms_service.vm_service(oVirt_vm.id)
-            import time
-            for _ in range(60):
-                v = vm_service.get()
-                if v.status != sdk.types.VmStatus.IMAGE_LOCKED:
-                    break
-                time.sleep(2)
-
-            for nic in target_nics:
-                try:
-                    vm_service.nics_service().add(nic)
-                    LOG.info(
-                        "Successfully added nic %s to target VM %s",
-                        nic.name, oVirt_vm.id)
-                except Exception as e:
-                    LOG.warning(
-                        "Failed to add nic %s to target VM %s: %s",
-                        nic.name, oVirt_vm.id, e)
-
-            # Disks attachieren
-            for idx, vol in enumerate(volumes_info):
-                bootable = (idx == 0)
-                if clone_disks:
-                    # Clone statt direktes Attach
-                    cloned = self._clone_disk(
-                        conn, vol["volume_id"],
-                        target_environment.get("storage_domain_id"))
-                    vol["clone_id"] = cloned.id
-                    self._attach_disk_to_vm(
-                        conn, oVirt_vm.id, cloned.id, bootable=bootable)
-                else:
-                    self._attach_disk_to_vm(
-                        conn, oVirt_vm.id, vol["volume_id"], bootable=bootable)
-
-            return {
-                "instance_deployment_info": {
-                    "vm_id": oVirt_vm.id,
-                    "vm_name": oVirt_vm.name,
-                }
-            }
+            with mlog:
+                return self._deploy_replica_instance_inner(
+                    conn, mlog, target_environment, instance_name,
+                    export_info, volumes_info, clone_disks)
         finally:
             conn.close()
+
+    def _deploy_replica_instance_inner(
+            self, conn, mlog, target_environment, instance_name,
+            export_info, volumes_info, clone_disks):
+        """Interne Implementierung von deploy_replica_instance()."""
+        import ovirtsdk4 as sdk
+
+        self._resolve_target_environment(conn, target_environment)
+        vms_service = conn.system_service().vms_service()
+        cluster_id = target_environment["cluster_id"]
+        datacenter_id = target_environment.get("datacenter_id")
+
+        memory_mb = export_info.get("memory_mb", 4096)
+        vcpus = export_info.get("num_cpu", 2)
+
+        # NICs konfigurieren:
+        # Expliziter network_map-Eintrag hat Vorrang, sonst auto-provisioning.
+        target_nics = []
+        network_map = target_environment.get("network_map", {})
+        for nic in export_info.get("devices", {}).get("nics", []):
+            src_net = nic.get("network_name") or nic.get("network_id")
+            dst_net = None
+            if src_net:
+                dst_net = network_map.get(src_net)
+            if not dst_net:
+                dst_net = network_map.get("None") or network_map.get("none")
+            if not dst_net and network_map:
+                dst_net = list(network_map.values())[0]
+
+            # Auto-Provisioning: Netzwerk + VNIC-Profil auf OLVM anlegen
+            if not dst_net and src_net and datacenter_id:
+                vlan_id = nic.get("vlan_id", 0)
+                LOG.info(
+                    "Auto-provisioning network '%s' (VLAN %s) on OLVM ...",
+                    src_net, vlan_id)
+                dst_net = self._ensure_network_and_vnic_profile(
+                    conn, datacenter_id, cluster_id,
+                    network_name=src_net,
+                    vlan_id=vlan_id)
+                mlog.event(
+                    "network_provisioned",
+                    network=src_net,
+                    vlan_id=vlan_id,
+                    vnic_profile_id=dst_net)
+
+            # NIC-Name bereinigen (nur alphanumeric, -, _, .)
+            raw_nic_name = nic.get("name", "nic-0")
+            nic_name = "".join(
+                c if c.isalnum() or c in "-_." else "_"
+                for c in raw_nic_name)[:15]
+
+            if dst_net:
+                target_nics.append(
+                    sdk.types.Nic(
+                        name=nic_name,
+                        interface=sdk.types.NicInterface.VIRTIO,
+                        vnic_profile=sdk.types.VnicProfile(
+                            id=dst_net),
+                    )
+                )
+            else:
+                # Fallback: NIC ohne Profil (disconnected)
+                target_nics.append(
+                    sdk.types.Nic(
+                        name=nic_name,
+                        interface=sdk.types.NicInterface.VIRTIO,
+                    )
+                )
+
+        # Firmware-Typ
+        firmware = sdk.types.BiosType.I440FX_SEA_BIOS
+        if export_info.get("firmware_type") == "EFI":
+            firmware = sdk.types.BiosType.Q35_SEA_BIOS
+
+        # VM erstellen
+        mlog.event("vm_create_start", instance=instance_name)
+        oVirt_vm = vms_service.add(
+            vm=sdk.types.Vm(
+                name=instance_name[:64],
+                cluster=sdk.types.Cluster(id=cluster_id),
+                template=sdk.types.Template(name="Blank"),
+                cpu=sdk.types.Cpu(
+                    topology=sdk.types.CpuTopology(
+                        cores=vcpus,
+                        sockets=1,
+                    )
+                ),
+                memory=memory_mb * 1024 * 1024,
+                os=sdk.types.OperatingSystem(
+                    type=self._detect_os_type(export_info).upper(),
+                ),
+                bios=sdk.types.Bios(
+                    type=firmware
+                ),
+                type=sdk.types.VmType.SERVER,
+                nics=target_nics,
+            )
+        )
+        mlog.event("vm_created", vm_id=oVirt_vm.id, vm_name=oVirt_vm.name)
+
+        # Warten bis VM nicht mehr IMAGE_LOCKED
+        vm_service = vms_service.vm_service(oVirt_vm.id)
+        for _ in range(60):
+            v = vm_service.get()
+            if v.status != sdk.types.VmStatus.IMAGE_LOCKED:
+                break
+            time.sleep(2)
+
+        for nic in target_nics:
+            try:
+                vm_service.nics_service().add(nic)
+                LOG.info(
+                    "Successfully added nic %s to target VM %s",
+                    nic.name, oVirt_vm.id)
+            except Exception as e:
+                LOG.warning(
+                    "Failed to add nic %s to target VM %s: %s",
+                    nic.name, oVirt_vm.id, e)
+
+        # Disks attachieren
+        for idx, vol in enumerate(volumes_info):
+            bootable = (idx == 0)
+            size_gb = round(
+                vol.get("size_bytes", 0) / (1024 ** 3), 1) \
+                if vol.get("size_bytes") else None
+            mlog.event(
+                "disk_transfer",
+                disk_id=vol.get("volume_id"),
+                size_gb=size_gb,
+                bootable=bootable,
+                clone=clone_disks)
+            if clone_disks:
+                cloned = self._clone_disk(
+                    conn, vol["volume_id"],
+                    target_environment.get("storage_domain_id"))
+                vol["clone_id"] = cloned.id
+                self._attach_disk_to_vm(
+                    conn, oVirt_vm.id, cloned.id, bootable=bootable)
+            else:
+                self._attach_disk_to_vm(
+                    conn, oVirt_vm.id, vol["volume_id"], bootable=bootable)
+
+        return {
+            "instance_deployment_info": {
+                "vm_id": oVirt_vm.id,
+                "vm_name": oVirt_vm.name,
+            }
+        }
 
     def _clone_disk(self, conn, disk_id, storage_domain_id):
         """Klont eine oVirt-Disk."""
@@ -1039,8 +1203,7 @@ class OLVMoVirtImportProvider(
             time.sleep(2)
         else:
             raise exception.CoriolisException(
-                f"Failed to find cloned disk {clone_name} "
-                f"after copy request.")
+                f"Failed to find cloned disk {clone_name} after copy request.")
 
         # Wait for the clone operation to complete and the disk to be unlocked
         clone_service = disks_service.disk_service(clone.id)
@@ -1049,8 +1212,7 @@ class OLVMoVirtImportProvider(
                 d = clone_service.get()
                 if d.status == sdk.types.DiskStatus.OK:
                     LOG.info(
-                        "Cloned disk %s is ready with status OK.",
-                        clone.id)
+                        "Cloned disk %s is ready with status OK.", clone.id)
                     break
                 if d.status == sdk.types.DiskStatus.ILLEGAL:
                     raise exception.CoriolisException(

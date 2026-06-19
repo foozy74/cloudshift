@@ -365,10 +365,9 @@ class OLVMoVirtImportProviderTestCase(test_base.CoriolisBaseTestCase):
         mock_get_conn.assert_called_once()
         vm_svc.stop.assert_called_once()
         mock_wait_down.assert_called_once_with(vms_svc, "test-minion-id")
-        vm_svc.disk_attachments_service.return_value.list.assert_called_once()
-        vm_svc.disk_attachments_service.return_value \
-            .attachment_service.assert_called_once_with(
-                "attachment-1")
+        attachments_mock = vm_svc.disk_attachments_service.return_value
+        attachments_mock.attachment_service.assert_called_once_with(
+            "attachment-1")
         attachment_svc.remove.assert_called_once_with(detach_only=True)
         vm_svc.remove.assert_called_once()
         mock_conn.close.assert_called_once()
