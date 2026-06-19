@@ -1,0 +1,78 @@
+{
+  "$schema": "http://cloudbase.it/coriolis/schemas/osmorphing_resources#",
+  "type": "object",
+  "properties": {
+    "osmorphing_connection_info": {
+      "type": "object",
+      "properties": {
+        "ip": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "pkey": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "cert_pem": {
+          "type": "string"
+        },
+        "cert_key_pem": {
+          "type": "string"
+        }
+      },
+      "required": ["ip", "port", "username"]
+    },
+    "osmorphing_info": {
+      "type": "object",
+      "properties": {
+        "os_type": {
+          "enum": ["bsd", "linux", "osx", "solaris", "windows"]
+        },
+        "nics_info": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "nics_set_dhcp": {
+          "type": "boolean",
+          "default": "true"
+        },
+        "ignore_devices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "osmorphing_parameters": {
+          "type": "object",
+          "properties": {
+            "retain_user_credentials": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      },
+      "required": ["os_type"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["osmorphing_connection_info", "osmorphing_info"],
+  "definitions": {
+    "nullableString": {
+      "oneOf": [{
+        "type": "string"
+      }, {
+        "type": "null"
+      }]
+    }
+  }
+}

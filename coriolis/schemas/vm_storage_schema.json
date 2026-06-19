@@ -1,0 +1,35 @@
+{
+  "$schema": "http://cloudbase.it/coriolis/schemas/vm_storage_info#",
+  "type": "object",
+  "properties": {
+    "storage_backends": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "additional_provider_properties": {
+            "type": "object"
+          }
+        },
+      "required": [
+        "id",
+        "name"
+      ]
+     }
+    },
+    "config_default": {
+      "type": ["string", "null"]
+    }
+  },
+  "required": [
+    "storage_backends"
+  ],
+  "additionalProperties": false
+}

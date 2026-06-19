@@ -1,0 +1,508 @@
+# Copyright 2026 Cloudbase Solutions Srl
+# All Rights Reserved.
+
+"""
+Integration test utils.
+"""
+
+import contextlib
+import json
+import os
+import socket
+import subprocess
+import tempfile
+import time
+
+from oslo_log import log as logging
+import paramiko
+
+from coriolis import utils as coriolis_utils
+
+LOG = logging.getLogger(__name__)
+
+_SETTLE_TIMEOUT = 15
+_POLL_INTERVAL = 1
+
+# Sysfs knob for adding / removing scsi_debug hosts. Writing "1" adds a new
+# host with its own independent backing store (requires per_host_store=1);
+# writing "-1" removes the most-recently added host (LIFO).
+_SCSI_DEBUG_ADD_HOST = "/sys/bus/pseudo/drivers/scsi_debug/add_host"
+
+DATA_MINION_IMAGE = "coriolis-data-minion:test"
+
+
+def get_host_disk_devices() -> set:
+    """Return the /dev paths of disk-type block devices visible on the host."""
+    disk_names = _lsblk_disk_names()
+    return {"/dev/" + disk_name for disk_name in disk_names}
+
+
+def _lsblk_disk_names() -> set:
+    """Return the set of disk-type block device names visible to lsblk."""
+    result = _run(["lsblk", "-Jb", "-o", "NAME,TYPE"], check=False)
+    if result.returncode != 0:
+        return set()
+
+    data = json.loads(result.stdout)
+    return {
+        d["name"] for d in data.get("blockdevices", [])
+        if d["type"] == "disk"
+    }
+
+
+def _poll_for_new_disks(before, count, timeout=_SETTLE_TIMEOUT):
+    """Block until *count* new disk names appear beyond *before*.
+
+    :returns: sorted list of new names.
+    :raises: ``AssertionError`` on timeout.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        subprocess.call(["udevadm", "settle"])
+        new = sorted(_lsblk_disk_names() - before)
+        if len(new) >= count:
+            return new[:count]
+        time.sleep(_POLL_INTERVAL)
+    raise AssertionError(
+        "Only %d new disk(s) appeared within %ds (expected %d)"
+        % (len(sorted(_lsblk_disk_names() - before)), timeout, count)
+    )
+
+
+def init_scsi_debug(size_mb=16):
+    """Load scsi_debug with per_host_store=1 and size_mb per device.
+
+    Call ``destroy_scsi_debug`` first if the module is already loaded with a
+    different size. With ``per_host_store=1`` every host added via the sysfs
+    knob gets its own independent backing store, so devices never share
+    storage.
+    """
+    _run([
+        "modprobe",
+        "scsi_debug",
+        "per_host_store=1",
+        "num_tgts=1",
+        f"dev_size_mb={size_mb}",
+    ])
+
+
+def destroy_scsi_debug():
+    """Unload the scsi_debug module."""
+    _run(["modprobe", "-r", "scsi_debug"])
+
+
+def add_scsi_debug_device() -> str:
+    """Add one scsi_debug host and return its /dev/sdX path.
+
+    Each call creates an independent backing store (per_host_store=1), so
+    writing to one device is never visible through another.
+    """
+    before = _lsblk_disk_names()
+    with open(_SCSI_DEBUG_ADD_HOST, "w") as fh:
+        fh.write("1\n")
+
+    new = _poll_for_new_disks(before, count=1)
+    path = os.path.join("/dev", new[0])
+    LOG.info("scsi_debug device added: %s", path)
+
+    return path
+
+
+def remove_scsi_debug_device():
+    """Remove the most-recently added scsi_debug host."""
+    with open(_SCSI_DEBUG_ADD_HOST, "w") as fh:
+        fh.write("-1\n")
+
+
+def write_test_pattern(device_path, chunk_size=4096):
+    """Fill *device_path* with a repeating 4-byte test pattern.
+
+    Returns the pattern bytes so callers can verify the destination later.
+    The write is done with ``dd`` so it works on raw block devices.
+    """
+    pattern = b"\xde\xad\xbe\xef"
+    # Write the pattern to a temp file, then dd it onto the device.
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp_path = tmp.name
+        tmp.write(pattern * (chunk_size // len(pattern)))
+
+    try:
+        _run(
+            ["dd", "if=%s" % tmp_path, "of=%s" % device_path,
+             "bs=%d" % chunk_size, "conv=notrunc"],
+        )
+        _run(["sync"])
+    finally:
+        os.unlink(tmp_path)
+
+    return pattern
+
+
+def write_bytes_at_offset(device_path, offset, data):
+    """Write *data* at *offset* bytes into *device_path*."""
+    with open(device_path, "r+b") as fh:
+        fh.seek(offset)
+        fh.write(data)
+
+
+def devices_match(path_a, path_b):
+    """Return True if the contents of two block devices are identical."""
+    result = _run(["cmp", "--silent", path_a, path_b], check=False)
+    return result.returncode == 0
+
+
+def _run(cmd, check=True):
+    LOG.debug("Running: %s", " ".join(str(c) for c in cmd))
+    try:
+        return subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=check,
+        )
+    except subprocess.CalledProcessError as ex:
+        LOG.error(
+            "Command failed: %s, return code: %s, stderr: %s",
+            " ".join(str(c) for c in cmd),
+            ex.returncode,
+            ex.stderr)
+        raise
+
+
+def wait_for_ssh(host, port, username, pkey_path, timeout=30):
+    """Block until SSH on *host*:*port* accepts connections.
+
+    :param host: hostname or IP
+    :param port: SSH port
+    :param username: SSH username
+    :param pkey_path: path to the private key file
+    :param timeout: seconds before raising AssertionError
+    """
+    pkey = paramiko.RSAKey.from_private_key_file(pkey_path)
+    deadline = time.monotonic() + timeout
+    last_exc = None
+    while time.monotonic() < deadline:
+        try:
+            client = coriolis_utils.connect_ssh(
+                host, port, username, pkey=pkey, connect_timeout=5)
+            client.close()
+            return
+        except (paramiko.SSHException, socket.error, OSError) as exc:
+            last_exc = exc
+            time.sleep(1)
+    raise AssertionError(
+        "SSH %s@%s:%d not ready after %ds: %s" % (
+            username, host, port, timeout, last_exc))
+
+
+# Docker utils
+
+
+def list_containers(prefixes) -> set:
+    result = subprocess.run(
+        ["docker", "ps", "-a", "--format", "{{.Names}}"],
+        capture_output=True,
+        text=True,
+    )
+
+    return {
+        name for name in result.stdout.splitlines()
+        if any(name.startswith(p) for p in prefixes)
+    }
+
+
+def container_image_exists(image_name):
+    result = subprocess.run(
+        ["docker", "image", "inspect", image_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    return result.returncode == 0
+
+
+def start_container(container_id):
+    """Start a stopped Docker container."""
+    _run(["docker", "start", container_id], check=False)
+
+
+def _run_container(image, name, extra_args=None):
+    cmd = ["docker", "run", "--detach", "--name", name]
+    if extra_args:
+        cmd.extend(extra_args)
+    cmd.append(image)
+    result = _run(cmd)
+    return result.stdout.decode().strip()
+
+
+def run_container(
+    image, name, is_systemd=False, ssh_key=None, volumes=None, devices=None,
+    device_cgroup_rules=None, extra_args=None,
+):
+    """Start a detached Docker container and return its container ID.
+
+    :param image: Docker image name / tag to run.
+    :param name: Name to assign to the container.
+    :param is_systemd: If the container is running systemd. If true, the
+      necessary volumes, security opts, and caps are added for it to run.
+    :param ssh_key: SSH key to add as a volume to the authorized_keys.
+    :param volumes: List of volumes to attach to the container.
+    :param devices: List of devices to attach to the container.
+    :param device_cgroup_rules: List of device cgroup rules (e.g.
+      ``["b *:* rwm"]``). This is needed for device hotplug after container
+      creation.
+    :param extra_args: Optional list of extra ``docker run`` arguments.
+    :returns: container ID string (stripped).
+    """
+    volumes = volumes or []
+    devices = devices or []
+    device_cgroup_rules = device_cgroup_rules or []
+    extra_args = extra_args or []
+    sec_opts = []
+    caps = []
+
+    if is_systemd:
+        volumes += ["/sys/fs/cgroup:/sys/fs/cgroup:rw"]
+        sec_opts = ["apparmor=unconfined"]
+        caps = ["SYS_ADMIN"]
+        extra_args += ["--cgroupns=host"]
+
+    if ssh_key:
+        volumes = [f"{ssh_key}:/root/.ssh/authorized_keys:ro"] + volumes
+
+    for volume in volumes:
+        extra_args += ["--volume", volume]
+
+    for device in devices:
+        extra_args += ["--device", f"{device}:{device}"]
+
+    for rule in device_cgroup_rules:
+        extra_args += ["--device-cgroup-rule", rule]
+
+    for cap in caps:
+        extra_args += ["--cap-add", cap]
+
+    for sec_opt in sec_opts:
+        extra_args += ["--security-opt", sec_opt]
+
+    return _run_container(image, name, extra_args)
+
+
+def stop_container(container_id):
+    """Stop a Docker container."""
+    _run(["docker", "stop", "--time", "5", container_id], check=False)
+
+
+def remove_container(container_id):
+    """Stop and remove a Docker container, ignoring errors.
+
+    :param container_id: container ID or name to stop / remove.
+    """
+    stop_container(container_id)
+    _run(["docker", "rm", "--force", container_id], check=False)
+
+
+def get_container_ip(container_id):
+    """Return the first bridge-network IP address of *container_id*.
+
+    :param container_id: container ID or name
+    :returns: IP address string
+    """
+    try:
+        result = _run(
+            ["docker", "inspect", "--format",
+             "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+             container_id])
+    except subprocess.CalledProcessError as ex:
+        if "template parsing error" in ex.stderr:
+            # Fallback to the old format.
+            result = _run(
+                ["docker", "inspect", "--format",
+                 "{{.NetworkSettings.IPAddress}}",
+                 container_id])
+        else:
+            raise
+    return result.stdout.decode().strip()
+
+
+def _get_container_pid(container_id):
+    """Return the host PID of the init process of *container_id*."""
+    result = _run(
+        ["docker", "inspect", "--format", "{{.State.Pid}}", container_id])
+    return int(result.stdout.decode().strip())
+
+
+def hotplug_device_to_container(container_id, device_path):
+    """Create a device node for *device_path* in *container_id*'s namespace."""
+    pid = _get_container_pid(container_id)
+    stat_result = os.stat(device_path)
+    major = os.major(stat_result.st_rdev)
+    minor = os.minor(stat_result.st_rdev)
+
+    _run([
+        "nsenter", "--target", str(pid), "--mount", "--",
+        "mknod", device_path, "b", str(major), str(minor),
+    ])
+
+
+def unplug_device_from_container(container_id, device_path):
+    """Remove a device node from *container_id*'s mount namespace."""
+    pid = _get_container_pid(container_id)
+    _run([
+        "nsenter", "--target", str(pid), "--mount", "--",
+        "rm", "-f", device_path,
+    ], check=False)
+
+
+# OS Morphing utils
+
+
+def write_os_image_to_disk(device_path, container_image):
+    """Write a real Linux rootfs to *device_path*.
+
+    Exports the filesystem of a container image via ``docker export`` and
+    extracts it onto an ext4-formatted device, giving a chroot-able root with
+    that container OS' standard filesystem and binaries present.
+    """
+    _run(["mkfs.ext4", "-F", device_path])
+
+    result = _run(["docker", "create", container_image])
+    container_id = result.stdout.decode().strip()
+
+    try:
+        with tempfile.TemporaryDirectory() as mount_point:
+            _run(["mount", device_path, mount_point])
+
+            try:
+                export = subprocess.Popen(
+                    ["docker", "export", container_id],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                subprocess.run(
+                    ["tar", "-x", "-C", mount_point],
+                    stdin=export.stdout,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=True,
+                )
+                export.stdout.close()
+                export.wait()
+            finally:
+                _run(["umount", mount_point])
+
+    finally:
+        _run(["docker", "rm", "-f", container_id], check=False)
+
+
+def _fixup_luks_inner_os(mapper_path, luks_uuid):
+    """Patch the OS image inside a LUKS mapper to work with OS morphing.
+
+    Docker container images are not full OS installs, so a few things need
+    fixing before Coriolis can morph them:
+
+    1. /etc/crypttab is missing: the LUKS mixin needs a UUID= entry there to
+       configure initramfs auto-unlock.
+    2. /boot may be absent (e.g. Rocky Linux 9 Docker image): the osmount
+       root-finder requires etc, bin, sbin, and boot to all be present.
+    """
+    mapper_name = "luks-%s" % luks_uuid
+    crypttab_entry = "%s\tUUID=%s\tnone\tluks\n" % (mapper_name, luks_uuid)
+
+    with tempfile.TemporaryDirectory() as mount_point:
+        _run(["mount", mapper_path, mount_point])
+
+        try:
+            etc_dir = os.path.join(mount_point, "etc")
+            os.makedirs(etc_dir, exist_ok=True)
+            crypttab_path = os.path.join(etc_dir, "crypttab")
+
+            with open(crypttab_path, "w") as fh:
+                fh.write(crypttab_entry)
+
+            os.makedirs(os.path.join(mount_point, "boot"), exist_ok=True)
+        finally:
+            _run(["umount", mount_point])
+
+
+def make_luks_device(device_path, key_file, container_image):
+    """Format *device_path* with LUKS and write a minimal Linux OS inside.
+
+    The mapper device is opened only for the duration of the call. It is closed
+    before returning, leaving the raw device encrypted.
+
+    Exports the filesystem the container image onto the given device, then
+    writes a /etc/crypttab entry so that the LUKS mixin can find the UUID
+    when configuring initramfs auto-unlock during OS morphing.
+    """
+    _run([
+        "cryptsetup", "luksFormat", "--batch-mode", "--key-file", key_file,
+        device_path,
+    ])
+
+    luks_uuid = _run(
+        ["cryptsetup", "luksUUID", device_path]).stdout.decode().strip()
+
+    with luks_open(device_path, key_file) as mapper_path:
+        write_os_image_to_disk(mapper_path, container_image)
+        _fixup_luks_inner_os(mapper_path, luks_uuid)
+
+
+@contextlib.contextmanager
+def luks_open(device_path, key_file):
+    mapper_name = "coriolis_luks_setup_%s" % os.path.basename(device_path)
+    _run([
+        "cryptsetup", "luksOpen", "--key-file", key_file, device_path,
+        mapper_name,
+    ])
+
+    try:
+        yield "/dev/mapper/%s" % mapper_name
+    finally:
+        _run(["cryptsetup", "luksClose", mapper_name])
+
+
+def path_exists_on_device(device_path, rel_path):
+    """Checks if *rel_path* exists on the filesystem of *device_path*.
+
+    Uses lexists so dangling symlinks (e.g. absolute targets only valid inside
+    the OS, not on the host) are still reported as present.
+    """
+    with tempfile.TemporaryDirectory() as mount_point:
+        _run(["mount", "-o", "ro", device_path, mount_point])
+
+        try:
+            return os.path.lexists(os.path.join(mount_point, rel_path))
+        finally:
+            _run(["umount", mount_point])
+
+
+def read_file_from_device(device_path, rel_path):
+    """Retrieves the specified file from the filesystem of *device_path*.
+
+    Mounts the device read-only into a temporary directory, reads the file,
+    then unmounts.
+    """
+    with tempfile.TemporaryDirectory() as mount_point:
+        _run(["mount", "-o", "ro", device_path, mount_point])
+
+        try:
+            with open(os.path.join(mount_point, rel_path)) as f:
+                return f.read()
+        finally:
+            _run(["umount", mount_point])
+
+
+def list_files_from_device(device_path, rel_path):
+    """Enumerates files from the filesystem of *device_path*.
+
+    Mounts the device read-only into a temporary directory, enumerates files,
+    then unmounts.
+    """
+    with tempfile.TemporaryDirectory() as mount_point:
+        _run(["mount", "-o", "ro", device_path, mount_point])
+
+        try:
+            return os.listdir(os.path.join(mount_point, rel_path))
+        finally:
+            _run(["umount", mount_point])

@@ -1,0 +1,211 @@
+version: '3.8'
+
+services:
+  database:
+    image: mariadb:10-jammy
+    container_name: cloudshift-db
+    security_opt:
+      - label:disable
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: coriolis
+      MYSQL_USER: coriolis
+      MYSQL_PASSWORD: ${DB_PASSWORD:-coriolis_password}
+    ports:
+      - "13306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: cloudshift-rabbitmq
+    security_opt:
+      - label:disable
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-db-sync
+    security_opt:
+      - label:disable
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    command: ["cloudshift-dbsync", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-api
+    security_opt:
+      - label:disable
+    ports:
+      - "7667:7667"
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+      - ./etc/coriolis/api-paste.ini:/etc/coriolis/api-paste.ini
+    command: ["cloudshift-api", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db-sync:
+        condition: service_completed_successfully
+
+  conductor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-conductor
+    security_opt:
+      - label:disable
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    command: ["cloudshift-conductor", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db-sync:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-worker
+    security_opt:
+      - label:disable
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+      - ~/.ssh:/root/.ssh:ro
+    command: ["cloudshift-worker", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db-sync:
+        condition: service_completed_successfully
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-scheduler
+    security_opt:
+      - label:disable
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    command: ["cloudshift-scheduler", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db-sync:
+        condition: service_completed_successfully
+
+  minion-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-minion-manager
+    security_opt:
+      - label:disable
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    command: ["cloudshift-minion-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db-sync:
+        condition: service_completed_successfully
+
+  deployer-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-deployer-manager
+    security_opt:
+      - label:disable
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    command: ["cloudshift-deployer-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db-sync:
+        condition: service_completed_successfully
+
+  transfer-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift:latest
+    container_name: cloudshift-transfer-cron
+    security_opt:
+      - label:disable
+    volumes:
+      - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    command: ["cloudshift-transfer-cron", "--config-file", "/etc/coriolis/coriolis.conf"]
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db-sync:
+        condition: service_completed_successfully
+
+  dashboard:
+    build:
+      context: ./docker/dashboard
+      dockerfile: Dockerfile
+    image: ghcr.io/thesolution/cloudshift-dashboard:latest
+    container_name: cloudshift-dashboard
+    security_opt:
+      - label:disable
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/dashboard/app.js:/usr/share/nginx/html/app.js
+    depends_on:
+      - api
+    profiles:
+      - dashboard
+
+volumes:
+  db_data:

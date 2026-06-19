@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coriolis Migration Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-mode">
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-logo">C</div>
+                <h2>Coriolis</h2>
+            </div>
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+                    <span class="icon">📊</span> <span data-i18n="nav-dashboard">Dashboard</span>
+                </a>
+                <a href="#endpoints" class="nav-item" data-tab="endpoints">
+                    <span class="icon">🔌</span> <span data-i18n="nav-endpoints">Endpunkte</span>
+                </a>
+                <a href="#transfers" class="nav-item" data-tab="transfers">
+                    <span class="icon">🚀</span> <span data-i18n="nav-transfers">Migrationen</span>
+                </a>
+                <a href="#services" class="nav-item" data-tab="services">
+                    <span class="icon">⚙️</span> <span data-i18n="nav-services">Systemdienste</span>
+                </a>
+                <a href="#configs" class="nav-item" data-tab="configs">
+                    <span class="icon">📝</span> <span data-i18n="nav-configs">Konfiguration</span>
+                </a>
+<a href="#faq" class="nav-item" data-tab="faq">
+                <span class="icon">❓</span> <span data-i18n="nav-faq">FAQ</span>
+            </a>
+            <a href="#swagger" class="nav-item" data-tab="swagger">
+                <span class="icon">📘</span> <span data-i18n="nav-api">API Docs</span>
+            </a>
+        </nav>
+            <div class="connection-status">
+                <div class="status-indicator online"></div>
+                <div class="status-details">
+                    <p class="status-label" data-i18n="api-status">Coriolis API</p>
+                    <p class="status-host" id="apiHost">172.23.219.54:7667</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="top-bar">
+                <h1 id="pageTitle" data-i18n="title-dashboard-overview">Dashboard Overview</h1>
+                <div class="top-bar-right">
+                    <div class="lang-selector">
+                        <button class="btn-lang active" id="btnLangDe" data-lang="de">DE</button>
+                        <button class="btn-lang" id="btnLangEn" data-lang="en">EN</button>
+                    </div>
+                    <div class="user-profile">
+                        <div class="avatar">A</div>
+                        <span class="username">Administrator</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Tab -->
+            <section id="dashboardTab" class="tab-content active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🔌</div>
+                        <div class="stat-info">
+                            <h3 data-i18n="card-endpoints">Endpunkte</h3>
+                            <p class="stat-value" id="countEndpoints">-</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🚀</div>
+                        <div class="stat-info">
+                            <h3 data-i18n="card-transfers">Migrationen</h3>
+                            <p class="stat-value" id="countTransfers">-</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⚙️</div>
+                        <div class="stat-info">
+                            <h3 data-i18n="card-worker">Worker Status</h3>
+                            <p class="stat-value" id="workerStatus">OK</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-sections">
+                    <div class="dashboard-card recent-transfers">
+                        <div class="card-header">
+                            <h2 data-i18n="active-transfers">Aktive Migrationen</h2>
+                            <a href="#transfers" class="btn-text btn-view-all" data-i18n="view-all">Alle anzeigen</a>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="recentTransfersTable">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="th-id">ID</th>
+                                        <th data-i18n="th-vms">VMs</th>
+                                        <th data-i18n="th-source">Quelle (VMware)</th>
+                                        <th data-i18n="th-target">Ziel (OLVM)</th>
+                                        <th data-i18n="th-status">Status</th>
+                                        <th data-i18n="th-actions">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="6" class="text-center" data-i18n="msg-loading">Lade Daten...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Endpoints Tab -->
+            <section id="endpointsTab" class="tab-content">
+                <div class="action-bar">
+                    <h2 data-i18n="title-endpoints">Registrierte Endpunkte</h2>
+                    <button class="btn btn-primary" id="btnNewEndpoint" data-i18n="btn-add-endpoint">+ Endpunkt hinzufügen</button>
+                </div>
+                <div class="endpoints-grid" id="endpointsGrid">
+                    <!-- Cards will be populated dynamically -->
+                </div>
+            </section>
+
+            <!-- Transfers Tab -->
+            <section id="transfersTab" class="tab-content">
+                <div class="action-bar">
+                    <h2 data-i18n="title-transfers">Migrations-Jobs</h2>
+                    <button class="btn btn-primary" id="btnNewTransfer" data-i18n="btn-create-transfer">+ Migration erstellen</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="transfersTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="th-id">ID</th>
+                                <th data-i18n="th-vms">VMs</th>
+                                <th data-i18n="th-source">Quelle (VMware)</th>
+                                <th data-i18n="th-target">Ziel (OLVM)</th>
+                                <th data-i18n="th-status">Status</th>
+                                <th data-i18n="th-actions">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Table rows will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Services Tab -->
+            <section id="servicesTab" class="tab-content">
+                <div class="action-bar">
+                    <h2 data-i18n="title-services">Coriolis Systemdienste</h2>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="servicesTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="th-service">Dienst</th>
+                                <th data-i18n="th-host">Host / Container</th>
+                                <th data-i18n="th-status">Status</th>
+                                <th data-i18n="th-updated">Zuletzt aktualisiert</th>
+                                <th data-i18n="th-actions">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Table rows will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Configs Tab -->
+            <section id="configsTab" class="tab-content">
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2 data-i18n="title-configs">Konfigurationsdateien</h2>
+                    </div>
+                    <div class="config-editor-container">
+                        <div class="form-group">
+                            <label for="configSelect" data-i18n="label-select-config">Datei auswählen</label>
+                            <select id="configSelect">
+                                <option value="" data-i18n="select-please">Bitte wählen...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="configTextarea" data-i18n="label-config-content">Dateiinhalt</label>
+                            <textarea id="configTextarea" class="config-textarea" readonly placeholder="Bitte wählen Sie eine Konfigurationsdatei aus..." data-i18n-placeholder="placeholder-config-select"></textarea>
+                        </div>
+                        <div class="form-actions" style="margin-top: 1rem;">
+                            <button class="btn btn-primary" id="btnSaveConfig" disabled data-i18n="btn-save-config">Speichern</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FAQ Tab -->
+            <section id="faqTab" class="tab-content">
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2 data-i18n="title-faq">Häufig gestellte Fragen (FAQ)</h2>
+                    </div>
+                    <div class="faq-container" id="faqList">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Swagger / API Docs Tab -->
+            <section id="swaggerTab" class="tab-content">
+                <div class="dashboard-card swagger-api-card">
+                    <div class="card-header">
+                        <h2 data-i18n="nav-api">API Docs</h2>
+                    </div>
+                    <div class="swagger-container">
+                        <iframe src="/swagger.html" title="API Documentation"></iframe>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal: Add Endpoint -->
+    <div class="modal-overlay" id="endpointModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="endpointModalTitle" data-i18n="modal-ep-title">Neuen Endpunkt registrieren</h2>
+                <button class="btn-close" id="btnChooseEndpointClose">&times;</button>
+            </div>
+            <form id="endpointForm">
+                <div class="form-group">
+                    <label for="endpointName" data-i18n="label-ep-name">Endpunkt Name</label>
+                    <input type="text" id="endpointName" required placeholder="z.B. vcenter-prod-01" data-i18n-placeholder="placeholder-ep-name">
+                </div>
+                <div class="form-group">
+                    <label for="endpointType" data-i18n="label-ep-type">Endpunkt Typ</label>
+                    <select id="endpointType" required>
+                        <option value="vmware_vsphere" data-i18n="opt-ep-vmware">VMware vSphere (Quelle)</option>
+                        <option value="olvm" data-i18n="opt-ep-olvm">Oracle OLVM (Ziel)</option>
+                        <option value="hyperv" data-i18n="opt-ep-hyperv">Microsoft Hyper-V (Ziel)</option>
+                    </select>
+                </div>
+                
+                <!-- VMware Fields -->
+                <div id="vmwareFields" class="provider-fields">
+                    <div class="form-group">
+                        <label for="vmwareHost" data-i18n="label-vcenter-host">vCenter Host / IP</label>
+                        <input type="text" id="vmwareHost" placeholder="z.B. vcenter.firma.local" data-i18n-placeholder="placeholder-vmware-host">
+                    </div>
+                    <div class="form-group">
+                        <label for="vmwareUser" data-i18n="label-username">Benutzername</label>
+                        <input type="text" id="vmwareUser" placeholder="administrator@vsphere.local" data-i18n-placeholder="placeholder-vmware-user">
+                    </div>
+                    <div class="form-group">
+                        <label for="vmwarePass" data-i18n="label-password">Passwort</label>
+                        <input type="password" id="vmwarePass">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="vmwareUntrusted" checked>
+                        <label for="vmwareUntrusted" data-i18n="label-ignore-ssl">SSL Zertifikat ignorieren (allow_untrusted)</label>
+                    </div>
+                </div>
+
+                <!-- OLVM Fields -->
+                <div id="olvmFields" class="provider-fields hidden">
+                    <div class="form-group">
+                        <label for="olvmUrl" data-i18n="label-olvm-url">OLVM Engine API URL</label>
+                        <input type="text" id="olvmUrl" placeholder="https://olvm-engine.firma.local/ovirt-engine/" data-i18n-placeholder="placeholder-olvm-url">
+                    </div>
+                    <div class="form-group">
+                        <label for="olvmUser" data-i18n="label-username">Benutzername</label>
+                        <input type="text" id="olvmUser" placeholder="admin@internal" data-i18n-placeholder="placeholder-olvm-user">
+                    </div>
+                    <div class="form-group">
+                        <label for="olvmPass" data-i18n="label-password">Passwort</label>
+                        <input type="password" id="olvmPass">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="olvmInsecure" checked>
+                        <label for="olvmInsecure" data-i18n="label-ignore-ssl">SSL Zertifikat ignorieren (insecure)</label>
+                    </div>
+                </div>
+
+                <!-- Hyper-V Fields -->
+                <div id="hypervFields" class="provider-fields hidden">
+                    <div class="form-group">
+                        <label for="hypervHost" data-i18n="label-hyperv-host">Hyper-V Host / IP</label>
+                        <input type="text" id="hypervHost" placeholder="z.B. hyperv-host.firma.local" data-i18n-placeholder="placeholder-hyperv-host">
+                    </div>
+                    <div class="form-group">
+                        <label for="hypervPort" data-i18n="label-hyperv-port">WinRM Port</label>
+                        <input type="number" id="hypervPort" value="5986" placeholder="5986">
+                    </div>
+                    <div class="form-group">
+                        <label for="hypervUser" data-i18n="label-username">Benutzername</label>
+                        <input type="text" id="hypervUser" placeholder="Administrator" data-i18n-placeholder="placeholder-hyperv-user">
+                    </div>
+                    <div class="form-group">
+                        <label for="hypervPass" data-i18n="label-password">Passwort</label>
+                        <input type="password" id="hypervPass">
+                    </div>
+                    <div class="form-group">
+                        <label for="hypervTransport" data-i18n="label-hyperv-transport">WinRM Transport</label>
+                        <select id="hypervTransport">
+                            <option value="ntlm">NTLM</option>
+                            <option value="kerberos">Kerberos</option>
+                            <option value="credssp">CredSSP</option>
+                            <option value="basic">Basic</option>
+                        </select>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="hypervHttps" checked>
+                        <label for="hypervHttps" data-i18n="label-hyperv-https">HTTPS verwenden (WinRM 5986)</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="hypervInsecure" checked>
+                        <label for="hypervInsecure" data-i18n="label-ignore-ssl-winrm">WinRM Zertifikat ignorieren</label>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="btnCancelEndpoint" data-i18n="btn-cancel">Abbrechen</button>
+                    <button type="submit" id="btnSubmitEndpoint" class="btn btn-primary" data-i18n="btn-register">Registrieren</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add Transfer -->
+    <div class="modal-overlay" id="transferModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 data-i18n="modal-tf-title">Migration erstellen</h2>
+                <button class="btn-close" id="btnChooseTransferClose">&times;</button>
+            </div>
+            <form id="transferForm">
+                <div class="form-group">
+                    <label for="transferSource" data-i18n="label-tf-source">Quelle (VMware Endpunkt)</label>
+                    <select id="transferSource" required>
+                        <option value="" data-i18n="select-please">Bitte wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="transferDest" data-i18n="label-tf-dest">Ziel (OLVM Endpunkt)</label>
+                    <select id="transferDest" required>
+                        <option value="" data-i18n="select-please">Bitte wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="transferVMs" data-i18n="label-tf-vms">VM Name (im vCenter)</label>
+                    <input type="text" id="transferVMs" required placeholder="z.B. webserver-prod-01" data-i18n-placeholder="placeholder-tf-vms">
+                </div>
+
+                <!-- OLVM target fields -->
+                <div id="tfOlvmFields" class="transfer-dest-fields">
+                    <div class="form-group">
+                        <label for="transferCluster" data-i18n="label-tf-cluster">Ziel-Cluster (in OLVM)</label>
+                        <input type="text" id="transferCluster" placeholder="z.B. Default" data-i18n-placeholder="placeholder-tf-cluster">
+                    </div>
+                    <div class="form-group">
+                        <label for="transferStorageDomain" data-i18n="label-tf-storage">Ziel-Storage Domain</label>
+                        <input type="text" id="transferStorageDomain" placeholder="z.B. data" data-i18n-placeholder="placeholder-tf-storage">
+                    </div>
+                </div>
+
+                <!-- Hyper-V target fields -->
+                <div id="tfHypervFields" class="transfer-dest-fields hidden">
+                    <div class="form-group">
+                        <label for="transferSwitch" data-i18n="label-tf-switch">Ziel Virtual Switch</label>
+                        <input type="text" id="transferSwitch" placeholder="z.B. External" data-i18n-placeholder="placeholder-tf-switch">
+                    </div>
+                    <div class="form-group">
+                        <label for="transferVmPath" data-i18n="label-tf-vmpath">Ziel VM-Pfad (auf dem Host)</label>
+                        <input type="text" id="transferVmPath" placeholder="C:\VMs" data-i18n-placeholder="placeholder-tf-vmpath">
+                    </div>
+                    <div class="form-group">
+                        <label for="transferVmGeneration" data-i18n="label-tf-generation">VM Generation</label>
+                        <select id="transferVmGeneration">
+                            <option value="">Auto</option>
+                            <option value="1">Generation 1</option>
+                            <option value="2">Generation 2</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="transferNetworkMap" data-i18n="label-tf-network">Netzwerk-Zuweisung (Quell-Netz -> Ziel-Netz)</label>
+                    <div class="mapping-inputs">
+                        <input type="text" id="sourceNet" placeholder="z.B. VM Network" required data-i18n-placeholder="placeholder-source-net">
+                        <span class="arrow">&rarr;</span>
+                        <input type="text" id="destNet" placeholder="z.B. ovirtmgmt" required data-i18n-placeholder="placeholder-dest-net">
+                    </div>
+                </div>
+                <div class="form-group" id="tfStorageMapGroup">
+                    <label for="transferStorageMap" data-i18n="label-tf-storage-map">Storage-Zuweisung (Quell-Datastore -> Ziel-Domain)</label>
+                    <div class="mapping-inputs">
+                        <input type="text" id="sourceStore" placeholder="z.B. datastore1" data-i18n-placeholder="placeholder-source-store">
+                        <span class="arrow">&rarr;</span>
+                        <input type="text" id="destStore" placeholder="z.B. data" data-i18n-placeholder="placeholder-dest-store">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="btnCancelTransfer" data-i18n="btn-cancel">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary" data-i18n="btn-create">Erstellen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

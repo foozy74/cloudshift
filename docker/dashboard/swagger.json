@@ -1,0 +1,352 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CloudShift (Coriolis) API",
+    "version": "v1",
+    "description": "VMware vSphere → OLVM / Hyper-V Migration as a Service. All endpoints are prefixed with `/v1/{project_id}/`. In standalone (NoAuth) mode, use `admin` as the project ID.",
+    "contact": {
+      "name": "CloudShift"
+    }
+  },
+  "servers": [
+    { "url": "/v1/admin", "description": "Standalone (NoAuth) mode — dashboard proxy" },
+    { "url": "http://localhost:7667/v1/{project_id}", "description": "Direct API access",
+      "variables": { "project_id": { "default": "admin" } } }
+  ],
+  "tags": [
+    { "name": "Endpoints", "description": "Source/destination cloud connections" },
+    { "name": "Transfers", "description": "Migration transfer definitions" },
+    { "name": "Executions", "description": "Transfer execution runs" },
+    { "name": "Deployments", "description": "Cutover / final deployment" },
+    { "name": "Services", "description": "Registered Coriolis services" },
+    { "name": "Providers", "description": "Available provider types" },
+    { "name": "Regions", "description": "Logical region grouping" },
+    { "name": "Diagnostics", "description": "System diagnostics" },
+    { "name": "Configs", "description": "Configuration file management" }
+  ],
+  "paths": {
+    "/endpoints": {
+      "get": {
+        "tags": ["Endpoints"],
+        "summary": "List endpoints",
+        "operationId": "listEndpoints",
+        "responses": {
+          "200": {
+            "description": "List of endpoints",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "endpoints": { "type": "array", "items": { "$ref": "#/components/schemas/Endpoint" } } } } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Endpoints"],
+        "summary": "Create endpoint",
+        "operationId": "createEndpoint",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateEndpoint" } } } },
+        "responses": {
+          "201": { "description": "Endpoint created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Endpoint" } } } }
+        }
+      }
+    },
+    "/endpoints/{endpoint_id}": {
+      "get": {
+        "tags": ["Endpoints"],
+        "summary": "Get endpoint details",
+        "operationId": "getEndpoint",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Endpoint details", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Endpoint" } } } } }
+      },
+      "put": {
+        "tags": ["Endpoints"],
+        "summary": "Update endpoint",
+        "operationId": "updateEndpoint",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateEndpoint" } } } },
+        "responses": { "200": { "description": "Endpoint updated" } }
+      },
+      "delete": {
+        "tags": ["Endpoints"],
+        "summary": "Delete endpoint",
+        "operationId": "deleteEndpoint",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Endpoint deleted" }, "403": { "description": "Endpoint in use" } }
+      }
+    },
+    "/endpoints/{endpoint_id}/actions": {
+      "post": {
+        "tags": ["Endpoints"],
+        "summary": "Execute endpoint action (validate_connection)",
+        "operationId": "endpointAction",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "validate_connection": { "type": "boolean" } } } } } },
+        "responses": { "200": { "description": "Action executed" } }
+      }
+    },
+    "/endpoints/{endpoint_id}/instances": {
+      "get": {
+        "tags": ["Endpoints"],
+        "summary": "List VMs at source endpoint",
+        "operationId": "listEndpointInstances",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "List of instances" } }
+      }
+    },
+    "/endpoints/{endpoint_id}/networks": {
+      "get": {
+        "tags": ["Endpoints"],
+        "summary": "List networks at endpoint",
+        "operationId": "listEndpointNetworks",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "List of networks" } }
+      }
+    },
+    "/endpoints/{endpoint_id}/storage": {
+      "get": {
+        "tags": ["Endpoints"],
+        "summary": "List storage backends at endpoint",
+        "operationId": "listEndpointStorage",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Storage backends" } }
+      }
+    },
+    "/endpoints/{endpoint_id}/destination-options": {
+      "get": {
+        "tags": ["Endpoints"],
+        "summary": "Destination environment options",
+        "operationId": "getDestinationOptions",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Available options" } }
+      }
+    },
+    "/endpoints/{endpoint_id}/source-options": {
+      "get": {
+        "tags": ["Endpoints"],
+        "summary": "Source environment options",
+        "operationId": "getSourceOptions",
+        "parameters": [{ "name": "endpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Available options" } }
+      }
+    },
+    "/transfers": {
+      "get": {
+        "tags": ["Transfers"],
+        "summary": "List transfers",
+        "operationId": "listTransfers",
+        "parameters": [
+          { "name": "include_task_info", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": { "200": { "description": "List of transfers" } }
+      },
+      "post": {
+        "tags": ["Transfers"],
+        "summary": "Create a transfer (migration job)",
+        "operationId": "createTransfer",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTransfer" } } } },
+        "responses": { "201": { "description": "Transfer created" } }
+      }
+    },
+    "/transfers/{transfer_id}": {
+      "get": {
+        "tags": ["Transfers"],
+        "summary": "Get transfer details",
+        "operationId": "getTransfer",
+        "parameters": [{ "name": "transfer_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Transfer details" } }
+      },
+      "delete": {
+        "tags": ["Transfers"],
+        "summary": "Delete transfer",
+        "operationId": "deleteTransfer",
+        "parameters": [{ "name": "transfer_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Transfer deleted" } }
+      }
+    },
+    "/transfers/{transfer_id}/actions": {
+      "post": {
+        "tags": ["Transfers"],
+        "summary": "Execute transfer action (start, pause, resume, cancel)",
+        "operationId": "transferAction",
+        "parameters": [{ "name": "transfer_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "Action executed" } }
+      }
+    },
+    "/transfers/{transfer_id}/executions": {
+      "get": {
+        "tags": ["Executions"],
+        "summary": "List transfer executions",
+        "operationId": "listExecutions",
+        "parameters": [{ "name": "transfer_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "List of executions" } }
+      },
+      "post": {
+        "tags": ["Executions"],
+        "summary": "Start a replication execution",
+        "operationId": "createExecution",
+        "parameters": [{ "name": "transfer_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "shutdown_instances": { "type": "boolean", "default": false }, "auto_deploy": { "type": "boolean", "default": false } } } } } },
+        "responses": { "201": { "description": "Execution started" } }
+      }
+    },
+    "/deployments": {
+      "get": {
+        "tags": ["Deployments"],
+        "summary": "List deployments",
+        "operationId": "listDeployments",
+        "responses": { "200": { "description": "List of deployments" } }
+      },
+      "post": {
+        "tags": ["Deployments"],
+        "summary": "Start cutover deployment",
+        "operationId": "createDeployment",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "transfer_id": { "type": "string" }, "force": { "type": "boolean", "default": false } }, "required": ["transfer_id"] } } } },
+        "responses": { "201": { "description": "Deployment started" } }
+      }
+    },
+    "/services": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "List registered services",
+        "operationId": "listServices",
+        "responses": { "200": { "description": "List of services" } }
+      }
+    },
+    "/services/{service_id}": {
+      "delete": {
+        "tags": ["Services"],
+        "summary": "Remove a dead service",
+        "operationId": "deleteService",
+        "parameters": [{ "name": "service_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Service removed" } }
+      }
+    },
+    "/providers": {
+      "get": {
+        "tags": ["Providers"],
+        "summary": "List available providers and their capabilities",
+        "operationId": "listProviders",
+        "responses": { "200": { "description": "Provider list" } }
+      }
+    },
+    "/regions": {
+      "get": {
+        "tags": ["Regions"],
+        "summary": "List regions",
+        "operationId": "listRegions",
+        "responses": { "200": { "description": "List of regions" } }
+      }
+    },
+    "/diagnostics": {
+      "get": {
+        "tags": ["Diagnostics"],
+        "summary": "Run system diagnostics",
+        "operationId": "runDiagnostics",
+        "responses": { "200": { "description": "Diagnostic results" } }
+      }
+    },
+    "/configs": {
+      "get": {
+        "tags": ["Configs"],
+        "summary": "List configuration files",
+        "operationId": "listConfigs",
+        "responses": { "200": { "description": "List of config files" } }
+      }
+    },
+    "/configs/{config_id}": {
+      "get": {
+        "tags": ["Configs"],
+        "summary": "Get config file contents",
+        "operationId": "getConfig",
+        "parameters": [{ "name": "config_id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "e.g. coriolis.conf, api-paste.ini, policy.yaml" }],
+        "responses": { "200": { "description": "Config file contents" } }
+      },
+      "put": {
+        "tags": ["Configs"],
+        "summary": "Update config file",
+        "operationId": "updateConfig",
+        "parameters": [{ "name": "config_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "content": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Config updated" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Endpoint": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["vmware_vsphere", "olvm", "hyperv"] },
+          "description": { "type": "string" },
+          "connection_info": { "type": "object" }
+        }
+      },
+      "CreateEndpoint": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string", "example": "vcenter-prod-01" },
+          "type": { "type": "string", "enum": ["vmware_vsphere", "olvm", "hyperv"], "example": "hyperv" },
+          "description": { "type": "string" },
+          "connection_info": {
+            "type": "object",
+            "description": "Connection details. Shape depends on type:",
+            "oneOf": [
+              {
+                "title": "VMware",
+                "properties": {
+                  "host": { "type": "string" },
+                  "username": { "type": "string" },
+                  "password": { "type": "string" },
+                  "allow_untrusted": { "type": "boolean" }
+                }
+              },
+              {
+                "title": "OLVM",
+                "properties": {
+                  "url": { "type": "string" },
+                  "username": { "type": "string" },
+                  "password": { "type": "string" },
+                  "insecure": { "type": "boolean" }
+                }
+              },
+              {
+                "title": "Hyper-V",
+                "properties": {
+                  "host": { "type": "string" },
+                  "port": { "type": "integer", "default": 5986 },
+                  "username": { "type": "string" },
+                  "password": { "type": "string" },
+                  "https": { "type": "boolean" },
+                  "cert_validation": { "type": "string", "enum": ["ignore", "validate"] },
+                  "transport": { "type": "string", "enum": ["ntlm", "kerberos", "credssp", "basic"] }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "CreateTransfer": {
+        "type": "object",
+        "required": ["origin_endpoint_id", "destination_endpoint_id", "instances"],
+        "properties": {
+          "origin_endpoint_id": { "type": "string", "format": "uuid" },
+          "destination_endpoint_id": { "type": "string", "format": "uuid" },
+          "instances": { "type": "array", "items": { "type": "string" }, "example": ["webserver-prod-01"] },
+          "source_environment": { "type": "object" },
+          "destination_environment": { "type": "object" },
+          "network_map": { "type": "object" },
+          "storage_mappings": { "type": "object" }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Project-Id",
+        "description": "Project ID header (use 'admin' in standalone mode)"
+      }
+    }
+  }
+}

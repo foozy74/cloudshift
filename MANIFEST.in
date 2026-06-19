@@ -1,0 +1,4 @@
+include coriolis/resources/write_data
+recursive-include coriolis/schemas *.json
+recursive-include coriolis/osmorphing/osmount/resources *.sh
+recursive-include coriolis/resources *
