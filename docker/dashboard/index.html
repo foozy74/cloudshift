@@ -398,13 +398,21 @@
                         <input type="text" id="destNet" placeholder="z.B. ovirtmgmt" required data-i18n-placeholder="placeholder-dest-net">
                     </div>
                 </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="transferPreserveMac">
+                    <label for="transferPreserveMac" data-i18n="label-tf-preserve-mac">MAC-Adressen der Quell-VM beibehalten</label>
+                </div>
                 <div class="form-group" id="tfStorageMapGroup">
-                    <label for="transferStorageMap" data-i18n="label-tf-storage-map">Storage-Zuweisung (Quell-Datastore -> Ziel-Domain)</label>
-                    <div class="mapping-inputs">
-                        <input type="text" id="sourceStore" placeholder="z.B. datastore1" data-i18n-placeholder="placeholder-source-store">
-                        <span class="arrow">&rarr;</span>
-                        <input type="text" id="destStore" placeholder="z.B. data" data-i18n-placeholder="placeholder-dest-store">
+                    <label data-i18n="label-tf-storage-map">Storage-Zuweisung (Quell-Datastore -> Ziel-Domain)</label>
+                    <div id="storageMappingsContainer">
+                        <div class="mapping-inputs storage-mapping-row" style="margin-bottom: 0.5rem;">
+                            <input type="text" class="source-store" placeholder="z.B. datastore1" data-i18n-placeholder="placeholder-source-store">
+                            <span class="arrow">&rarr;</span>
+                            <input type="text" class="dest-store" placeholder="z.B. data" data-i18n-placeholder="placeholder-dest-store">
+                            <button type="button" class="btn-remove-mapping">&times;</button>
+                        </div>
                     </div>
+                    <button type="button" id="btnAddStorageMapping" class="btn btn-secondary btn-sm" data-i18n="btn-add-storage-mapping" style="margin-top: 0.5rem; font-size: 0.8rem; padding: 0.25rem 0.5rem;">+ Zuweisung hinzufügen</button>
                 </div>
 
                 <div class="form-actions">

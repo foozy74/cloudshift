@@ -582,6 +582,57 @@ class BaseLinuxOSMountTools(luks_mixin.LinuxLUKSMixin, BaseSSHOSMountTools):
 
         self._unlock_luks_devices(dev_paths)
 
+        # Configure LVM filter to ignore duplicate PVs
+        try:
+            pvscan_out = self._exec_cmd("sudo pvscan 2>&1 || true")
+            reject_devs = set()
+            for line in pvscan_out.splitlines():
+                if "Not using device" in line:
+                    parts = line.split()
+                    for p in parts:
+                        if p.startswith("/dev/"):
+                            reject_devs.add(p.rstrip('.'))
+            
+            if reject_devs:
+                LOG.info(
+                    "Detected duplicate LVM devices: %s. Resolving all alternative paths/symlinks.", reject_devs)
+                resolved_rejects = set(reject_devs)
+                for dev in sorted(reject_devs):
+                    # Get all paths on the minion resolving to the same device
+                    cmd = (
+                        f"python3 -c \"import os; t=os.path.realpath('{dev}'); "
+                        f"print('\\n'.join(os.path.join(r, f) for r, d, files in os.walk('/dev') "
+                        f"for f in files if os.path.realpath(os.path.join(r, f)) == t))\" 2>/dev/null || "
+                        f"python -c \"import os; t=os.path.realpath('{dev}'); "
+                        f"print('\\n'.join(os.path.join(r, f) for r, d, files in os.walk('/dev') "
+                        f"for f in files if os.path.realpath(os.path.join(r, f)) == t))\" 2>/dev/null || true"
+                    )
+                    try:
+                        resolved_out = self._exec_cmd(cmd)
+                        for r_dev in resolved_out.splitlines():
+                            r_dev = r_dev.strip()
+                            if r_dev.startswith("/dev/"):
+                                resolved_rejects.add(r_dev)
+                    except Exception as ex:
+                        LOG.warning("Failed to resolve symlinks for %s: %s", dev, ex)
+                
+                reject_devs = resolved_rejects
+                LOG.info(
+                    "Final LVM reject filter list: %s", reject_devs)
+                filter_rules = [f"r|{dev}|" for dev in sorted(reject_devs)] + ["a|.*/|"]
+                filter_str = ", ".join([f'"{rule}"' for rule in filter_rules])
+                self._exec_cmd(
+                    f"sudo sed -i '/devices {{/a \\    filter = [ {filter_str} ]' "
+                    "/etc/lvm/lvm.conf")
+                self._exec_cmd(
+                    f"sudo sed -i '/devices {{/a \\    global_filter = [ {filter_str} ]' "
+                    "/etc/lvm/lvm.conf")
+                self._exec_cmd("sudo rm -rf /etc/lvm/cache/* || true")
+                self._exec_cmd("sudo pvscan --cache || true")
+        except Exception as ex:
+            LOG.warning(
+                "Failed to configure LVM filter for duplicate PVs: %s", ex)
+
         lvm_dev_paths = []
         self._check_vgs()
         vgs = self._get_vgs()

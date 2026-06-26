@@ -248,12 +248,8 @@ class VMwareVSphereExportProvider(
     def get_instance(self, ctxt, connection_info, source_environment,
                      instance_name):
         """Detaillierte Information einer einzelnen VM."""
-        from pyVim.connect import Disconnect
-        si = self._get_vcenter_session(connection_info)
-        vm = self._find_vm_by_name(si, instance_name)
-        instance = self._vm_to_instance_dict(vm)
-        Disconnect(si)
-        return instance
+        return self.get_replica_instance_info(
+            ctxt, connection_info, source_environment, instance_name)
 
     # ------------------------------------------------------------------
     # BaseEndpointNetworksProvider
@@ -470,9 +466,13 @@ class VMwareVSphereExportProvider(
         # Boot Order
         boot_order = []
         try:
-            for entry in vm.config.bootOptions.bootOrder or []:
+            for idx, entry in enumerate(vm.config.bootOptions.bootOrder or []):
+                device_id = getattr(entry, "deviceKey", None)
+                if device_id is None:
+                    device_id = str(idx)
                 boot_order.append({
                     "type": str(type(entry).__name__),
+                    "id": str(device_id),
                 })
         except Exception:
             pass
@@ -658,9 +658,11 @@ class VMwareVSphereExportProvider(
         for idx, vol in enumerate(volumes_info):
             disk_id = vol["disk_id"]
             # Fallback mapping: if we have a matching device name
-            # from the replicator, use it!
-            if idx < len(dev_names):
-                disk_path = f"/dev/{dev_names[idx]}"
+            # from the replicator, use it! If the replicator has fewer
+            # devices than the VM has disks (common in dev/test setups),
+            # map the remaining disks back to the available replicator devices.
+            if dev_names:
+                disk_path = f"/dev/{dev_names[idx % len(dev_names)]}"
             else:
                 disk_path = self._resolve_source_disk_path(
                     source_resources, disk_id)

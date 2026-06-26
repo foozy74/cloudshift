@@ -134,11 +134,12 @@ class WSGIServiceTestCase(test_base.CoriolisBaseTestCase):
 
         self.assertEqual(result._workers, mock_get_worker_count.return_value)
 
+    @mock.patch('threading.Thread')
     @mock.patch.object(service, 'CONF')
     @mock.patch('oslo_service.wsgi.Loader.load_app')
     @mock.patch('coriolis.rpc.messaging.get_transport')
     def test_service_methods(self, mock_get_transport,
-                             mock_load_app, mock_conf):
+                             mock_load_app, mock_conf, mock_thread):
         mock_conf.api_migration_workers = 10
         mock_load_app.return_value = mock.MagicMock()
         mock_get_transport.return_value = mock.MagicMock()
@@ -146,6 +147,12 @@ class WSGIServiceTestCase(test_base.CoriolisBaseTestCase):
         result = service.WSGIService('test_service', None, True)
 
         result._server = mock.MagicMock()
+
+        def mock_thread_start():
+            target = mock_thread.call_args[1].get('target')
+            if target:
+                target()
+        mock_thread.return_value.start.side_effect = mock_thread_start
 
         self.assertEqual(result.get_workers_count(),
                          mock_conf.api_migration_workers)

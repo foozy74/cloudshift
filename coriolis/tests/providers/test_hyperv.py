@@ -217,3 +217,94 @@ class HyperVImportProviderTestCase(test_base.CoriolisBaseTestCase):
     def test_get_os_morphing_tools_unknown(self):
         self.assertEqual(
             [], self.provider.get_os_morphing_tools("solaris", {}))
+
+    def test_deploy_replica_instance_default(self):
+        mock_session = mock.MagicMock()
+        self.provider._run_ps = mock.MagicMock()
+        self.provider._get_default_switch = mock.MagicMock(return_value="Default Switch")
+        self.provider._get_vm_path = mock.MagicMock(return_value="C:\\VMs")
+        self.provider._attach_disk_to_vm = mock.MagicMock()
+
+        export_info = {
+            "memory_mb": 2048,
+            "num_cpu": 2,
+            "firmware_type": "BIOS",
+            "devices": {
+                "nics": [
+                    {
+                        "name": "nic1",
+                        "mac_address": "00:11:22:33:44:55",
+                        "network_name": "net1",
+                    },
+                    {
+                        "name": "nic2",
+                        "mac_address": "aa:bb:cc:dd:ee:ff",
+                        "network_name": "net2",
+                    }
+                ]
+            }
+        }
+        target_environment = {
+            "default_switch": "SwitchA",
+            "network_map": {"net1": "SwitchA", "net2": "SwitchB"},
+        }
+        volumes_info = [{"volume_id": "vol1.vhdx"}]
+
+        with mock.patch.object(self.provider, "_get_winrm_session", return_value=mock_session):
+            res = self.provider.deploy_replica_instance(
+                None, {"host": "hv"}, target_environment, "test-vm",
+                export_info, volumes_info, clone_disks=False)
+
+        self.assertEqual("test-vm", res["instance_deployment_info"]["vm_id"])
+        
+        ps_calls = [c[1][1] for c in self.provider._run_ps.mock_calls]
+        self.assertTrue(any("Connect-VMNetworkAdapter -VMName 'test-vm' -SwitchName 'SwitchA'" in call for call in ps_calls))
+        self.assertTrue(any("Add-VMNetworkAdapter -VMName 'test-vm' -SwitchName 'SwitchB'" in call for call in ps_calls))
+        self.assertFalse(any("Set-VMNetworkAdapter" in call for call in ps_calls))
+        self.assertFalse(any("-MacAddress" in call for call in ps_calls))
+
+    def test_deploy_replica_instance_preserve_mac(self):
+        mock_session = mock.MagicMock()
+        self.provider._run_ps = mock.MagicMock()
+        self.provider._get_default_switch = mock.MagicMock(return_value="Default Switch")
+        self.provider._get_vm_path = mock.MagicMock(return_value="C:\\VMs")
+        self.provider._attach_disk_to_vm = mock.MagicMock()
+
+        export_info = {
+            "memory_mb": 2048,
+            "num_cpu": 2,
+            "firmware_type": "BIOS",
+            "devices": {
+                "nics": [
+                    {
+                        "name": "nic1",
+                        "mac_address": "00:11:22:33:44:55",
+                        "network_name": "net1",
+                    },
+                    {
+                        "name": "nic2",
+                        "mac_address": "aa:bb:cc:dd:ee:ff",
+                        "network_name": "net2",
+                    }
+                ]
+            }
+        }
+        target_environment = {
+            "default_switch": "SwitchA",
+            "network_map": {"net1": "SwitchA", "net2": "SwitchB"},
+            "preserve_mac_addresses": True,
+        }
+        volumes_info = [{"volume_id": "vol1.vhdx"}]
+
+        with mock.patch.object(self.provider, "_get_winrm_session", return_value=mock_session):
+            res = self.provider.deploy_replica_instance(
+                None, {"host": "hv"}, target_environment, "test-vm",
+                export_info, volumes_info, clone_disks=False)
+
+        self.assertEqual("test-vm", res["instance_deployment_info"]["vm_id"])
+        
+        ps_calls = [c[1][1] for c in self.provider._run_ps.mock_calls]
+        self.assertTrue(any("Connect-VMNetworkAdapter -VMName 'test-vm' -SwitchName 'SwitchA'" in call for call in ps_calls))
+        self.assertTrue(any("Set-VMNetworkAdapter -VMName 'test-vm' -MacAddress '001122334455' -StaticMacAddress $true" in call for call in ps_calls))
+        self.assertTrue(any("Add-VMNetworkAdapter -VMName 'test-vm' -SwitchName 'SwitchB' -MacAddress 'aabbccddeeff' -StaticMacAddress $true" in call for call in ps_calls))
+

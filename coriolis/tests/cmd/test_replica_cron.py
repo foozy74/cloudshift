@@ -10,6 +10,7 @@ from coriolis import service
 from coriolis.tests import test_base
 from coriolis.transfer_cron.rpc import server as rpc_server
 from coriolis import utils
+from coriolis import version
 
 
 class TransferCronTestCase(test_base.CoriolisBaseTestCase):
@@ -36,7 +37,7 @@ class TransferCronTestCase(test_base.CoriolisBaseTestCase):
         transfer_cron.main()
 
         mock_conf.assert_called_once_with(
-            mock_argv[1:], project='coriolis', version="1.0.0")
+            mock_argv[1:], project='coriolis', version=version.version_string())
         mock_setup_logging.assert_called_once()
         mock_TransferCronServerEndpoint.assert_called_once()
         mock_MessagingService.assert_called_once_with(
@@ -50,4 +51,4 @@ class TransferCronTestCase(test_base.CoriolisBaseTestCase):
             get_workers_count.return_value)
         mock_service.launch.return_value.wait.assert_called_once()
         mock_gmr_setup.assert_called_once_with(
-            version="1.0.0", conf=mock_conf)
+            version=version.version_string(), conf=mock_conf)

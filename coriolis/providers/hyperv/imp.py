@@ -383,6 +383,10 @@ class HyperVImportProvider(
                     "type": "object",
                     "description": "Source-network to Hyper-V-switch mapping",
                 },
+                "preserve_mac_addresses": {
+                    "type": "boolean",
+                    "description": "True to preserve the source VM's MAC addresses on the target VM.",
+                },
             },
             "required": [],
         }
@@ -670,21 +674,43 @@ class HyperVImportProvider(
 
         # NICs konfigurieren (via network_map auf Switches)
         nics = export_info.get("devices", {}).get("nics", [])
+        preserve_mac = target_environment.get("preserve_mac_addresses", False)
+
         # Default-Adapter der VM mit erstem Switch verbinden
         self._run_ps(
             session,
             "Connect-VMNetworkAdapter -VMName '%s' -SwitchName '%s' "
             "-ErrorAction SilentlyContinue" % (vm_name, first_switch))
+
+        if preserve_mac and nics:
+            mac_addr = nics[0].get("mac_address")
+            if mac_addr:
+                clean_mac = mac_addr.replace(":", "").replace("-", "")
+                self._run_ps(
+                    session,
+                    "Set-VMNetworkAdapter -VMName '%s' -MacAddress '%s' "
+                    "-StaticMacAddress $true -ErrorAction SilentlyContinue" % (
+                        vm_name, clean_mac))
+
         # Zusätzliche NICs hinzufügen
         for nic in nics[1:]:
             src_net = nic.get("network_name") or nic.get("network_id")
             dst_switch = network_map.get(src_net) if src_net else None
             if not dst_switch:
                 dst_switch = first_switch
+
+            mac_cmd = ""
+            if preserve_mac:
+                mac_addr = nic.get("mac_address")
+                if mac_addr:
+                    clean_mac = mac_addr.replace(":", "").replace("-", "")
+                    mac_cmd = " -MacAddress '%s' -StaticMacAddress $true" % clean_mac
+
             self._run_ps(
                 session,
-                "Add-VMNetworkAdapter -VMName '%s' -SwitchName '%s' "
-                "-ErrorAction SilentlyContinue" % (vm_name, dst_switch))
+                "Add-VMNetworkAdapter -VMName '%s' -SwitchName '%s'%s "
+                "-ErrorAction SilentlyContinue" % (
+                    vm_name, dst_switch, mac_cmd))
 
         return {
             "instance_deployment_info": {

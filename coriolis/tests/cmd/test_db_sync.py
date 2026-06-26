@@ -8,6 +8,7 @@ from coriolis.cmd import db_sync
 from coriolis.db import api as db_api
 from coriolis.tests import test_base
 from coriolis import utils
+from coriolis import version
 
 
 class DBSyncTestCase(test_base.CoriolisBaseTestCase):
@@ -29,7 +30,7 @@ class DBSyncTestCase(test_base.CoriolisBaseTestCase):
         db_sync.main()
 
         mock_conf.assert_called_once_with(
-            mock_argv[1:], project='coriolis', version="1.0.0")
+            mock_argv[1:], project='coriolis', version=version.version_string())
         mock_setup_logging.assert_called_once()
         mock_get_engine.assert_called_once()
         mock_db_sync.assert_called_once_with(mock_get_engine.return_value)

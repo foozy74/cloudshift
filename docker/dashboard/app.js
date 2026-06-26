@@ -57,6 +57,8 @@ const TRANSLATIONS = {
         "label-tf-storage": "Ziel-Storage Domain",
         "label-tf-network": "Netzwerk-Zuweisung (Quell-Netz -> Ziel-Netz)",
         "label-tf-storage-map": "Storage-Zuweisung (Quell-Datastore -> Ziel-Domain)",
+        "btn-add-storage-mapping": "+ Zuweisung hinzufügen",
+        "label-tf-preserve-mac": "MAC-Adressen der Quell-VM beibehalten",
         "btn-create": "Erstellen",
         
         "select-please": "Bitte wählen...",
@@ -202,6 +204,8 @@ const TRANSLATIONS = {
         "label-tf-storage": "Target Storage Domain",
         "label-tf-network": "Network Mapping (Source Net -> Target Net)",
         "label-tf-storage-map": "Storage Mapping (Source Datastore -> Target Domain)",
+        "btn-add-storage-mapping": "+ Add Storage Mapping",
+        "label-tf-preserve-mac": "Preserve source VM MAC addresses",
         "btn-create": "Create",
         
         "select-please": "Please select...",
@@ -552,10 +556,14 @@ function setupModals() {
 
     btnNewTf.addEventListener('click', () => {
         loadEndpointsForSelect();
+        resetStorageMappings();
         tfModal.classList.add('active');
     });
     [btnNewTfClose, btnCancelTf].forEach(btn => {
-        btn.addEventListener('click', () => tfModal.classList.remove('active'));
+        btn.addEventListener('click', () => {
+            resetStorageMappings();
+            tfModal.classList.remove('active');
+        });
     });
 }
 
@@ -672,9 +680,6 @@ function setupForms() {
     
     const sourceNet = document.getElementById('sourceNet').value.trim();
     const destNet = document.getElementById('destNet').value.trim();
-    // Optional storage mapping (only for OLVM)
-    const sourceStore = document.getElementById('sourceStore').value.trim();
-    const destStore = document.getElementById('destStore').value.trim();
 
     const network_map = {};
     if (sourceNet && destNet) {
@@ -682,14 +687,28 @@ function setupForms() {
     }
 
     let storage_mappings = {};
-    if (sourceStore && destStore) {
+    const backend_mappings = [];
+    const defaultDestDomain = document.getElementById('transferStorageDomain').value.trim();
+    document.querySelectorAll('.storage-mapping-row').forEach(row => {
+        const srcInput = row.querySelector('.source-store');
+        const destInput = row.querySelector('.dest-store');
+        if (srcInput && destInput) {
+            const src = srcInput.value.trim();
+            let dest = destInput.value.trim();
+            if (!dest) {
+                dest = defaultDestDomain;
+            }
+            if (src && dest) {
+                backend_mappings.push({
+                    source: src,
+                    destination: dest
+                });
+            }
+        }
+    });
+    if (backend_mappings.length > 0) {
         storage_mappings = {
-            backend_mappings: [
-                {
-                    source: sourceStore,
-                    destination: destStore
-                }
-            ]
+            backend_mappings
         };
     }
 
@@ -698,17 +717,20 @@ function setupForms() {
         const endpoints = await fetchList('endpoints');
         const destEndpoint = endpoints.find(ep => ep.id === destination_endpoint_id);
         
+        const preserve_mac_addresses = document.getElementById('transferPreserveMac').checked;
         let destination_environment = {};
         if (destEndpoint && destEndpoint.type === 'olvm') {
             destination_environment = {
                 cluster_id: document.getElementById('transferCluster').value.trim(),
-                storage_domain_id: document.getElementById('transferStorageDomain').value.trim()
+                storage_domain_id: document.getElementById('transferStorageDomain').value.trim(),
+                preserve_mac_addresses
             };
         } else if (destEndpoint && destEndpoint.type === 'hyperv') {
             destination_environment = {
                 default_switch: document.getElementById('transferSwitch').value.trim(),
                 vm_path: document.getElementById('transferVmPath').value.trim(),
-                vm_generation: document.getElementById('transferVmGeneration').value ? parseInt(document.getElementById('transferVmGeneration').value) : undefined
+                vm_generation: document.getElementById('transferVmGeneration').value ? parseInt(document.getElementById('transferVmGeneration').value) : undefined,
+                preserve_mac_addresses
             };
         }
 
@@ -736,12 +758,133 @@ function setupForms() {
         alert(getTranslation('alert-tf-success'));
         document.getElementById('transferModal').classList.remove('active');
         document.getElementById('transferForm').reset();
+        resetStorageMappings();
         refreshAllData();
     } catch (err) {
         console.error(err);
         alert(`${getTranslation('alert-error-tf')}: ${err.message}`);
     }
     });
+
+    // Storage Mappings dynamic UI and event listeners
+    document.getElementById('btnAddStorageMapping').addEventListener('click', () => {
+        const container = document.getElementById('storageMappingsContainer');
+        container.appendChild(createStorageMappingRow('', ''));
+    });
+
+    document.getElementById('transferVMs').addEventListener('change', updateStorageMappingsFromVM);
+    document.getElementById('transferSource').addEventListener('change', updateStorageMappingsFromVM);
+
+    document.getElementById('transferStorageDomain').addEventListener('input', () => {
+        const targetDomain = document.getElementById('transferStorageDomain').value.trim();
+        document.querySelectorAll('.storage-mapping-row').forEach(row => {
+            const destInput = row.querySelector('.dest-store');
+            if (destInput && !destInput.value.trim()) {
+                destInput.placeholder = targetDomain || getTranslation('placeholder-dest-store') || 'z.B. data';
+            }
+        });
+    });
+}
+
+function createStorageMappingRow(source = '', destination = '') {
+    const row = document.createElement('div');
+    row.className = 'mapping-inputs storage-mapping-row';
+    row.style.marginBottom = '0.5rem';
+    
+    const sourceInput = document.createElement('input');
+    sourceInput.type = 'text';
+    sourceInput.className = 'source-store';
+    sourceInput.placeholder = getTranslation('placeholder-source-store') || 'z.B. datastore1';
+    sourceInput.value = source;
+    
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    arrow.innerHTML = '&rarr;';
+    
+    const destInput = document.createElement('input');
+    destInput.type = 'text';
+    destInput.className = 'dest-store';
+    destInput.placeholder = getTranslation('placeholder-dest-store') || 'z.B. data';
+    destInput.value = destination;
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn-remove-mapping';
+    removeBtn.innerHTML = '&times;';
+    removeBtn.addEventListener('click', () => {
+        row.remove();
+        const container = document.getElementById('storageMappingsContainer');
+        if (container.children.length === 0) {
+            container.appendChild(createStorageMappingRow('', ''));
+        }
+    });
+    
+    row.appendChild(sourceInput);
+    row.appendChild(arrow);
+    row.appendChild(destInput);
+    row.appendChild(removeBtn);
+    
+    return row;
+}
+
+function resetStorageMappings() {
+    const container = document.getElementById('storageMappingsContainer');
+    container.innerHTML = '';
+    container.appendChild(createStorageMappingRow('', ''));
+}
+
+async function fetchInstanceDetails(endpointId, instanceName) {
+    const instanceId = btoa(unescape(encodeURIComponent(instanceName)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+    const res = await fetch(`${API_BASE}/endpoints/${endpointId}/instances/${instanceId}`, {
+        headers: { 'X-Project-Id': 'admin' }
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return data.instance;
+}
+
+async function updateStorageMappingsFromVM() {
+    const sourceEndpointId = document.getElementById('transferSource').value;
+    const vmName = document.getElementById('transferVMs').value.trim();
+    
+    if (!sourceEndpointId || !vmName) {
+        return;
+    }
+    
+    const container = document.getElementById('storageMappingsContainer');
+    container.innerHTML = `<div class="loading-mappings" style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">
+        <span class="spinner-small"></span>
+        <span>${getTranslation('msg-loading') || 'Lade VM-Details...'}</span>
+    </div>`;
+    
+    try {
+        const instance = await fetchInstanceDetails(sourceEndpointId, vmName);
+        if (instance && instance.devices && instance.devices.disks) {
+            const datastores = new Set();
+            instance.devices.disks.forEach(disk => {
+                if (disk.storage_backend_identifier) {
+                    datastores.add(disk.storage_backend_identifier);
+                }
+            });
+            
+            container.innerHTML = '';
+            if (datastores.size > 0) {
+                const targetDomain = document.getElementById('transferStorageDomain').value.trim();
+                datastores.forEach(ds => {
+                    container.appendChild(createStorageMappingRow(ds, targetDomain));
+                });
+            } else {
+                container.appendChild(createStorageMappingRow('', ''));
+            }
+        } else {
+            resetStorageMappings();
+        }
+    } catch (err) {
+        console.error("Failed to load VM details for storage mapping:", err);
+        resetStorageMappings();
+    }
 }
 
 // Get lists and refresh components

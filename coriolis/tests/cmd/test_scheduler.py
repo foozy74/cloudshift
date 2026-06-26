@@ -10,6 +10,7 @@ from coriolis.scheduler.rpc import server as rpc_server
 from coriolis import service
 from coriolis.tests import test_base
 from coriolis import utils
+from coriolis import version
 
 
 class SchedulerTestCase(test_base.CoriolisBaseTestCase):
@@ -36,7 +37,7 @@ class SchedulerTestCase(test_base.CoriolisBaseTestCase):
         scheduler.main()
 
         mock_conf.assert_called_once_with(
-            mock_argv[1:], project='coriolis', version="1.0.0")
+            mock_argv[1:], project='coriolis', version=version.version_string())
         mock_setup_logging.assert_called_once()
         mock_SchedulerServerEndpoint.assert_called_once()
         mock_MessagingService.assert_called_once_with(
@@ -50,4 +51,4 @@ class SchedulerTestCase(test_base.CoriolisBaseTestCase):
             get_workers_count.return_value)
         mock_service.launch.return_value.wait.assert_called_once()
         mock_gmr_setup.assert_called_once_with(
-            version="1.0.0", conf=mock_conf)
+            version=version.version_string(), conf=mock_conf)

@@ -428,10 +428,103 @@ class OLVMoVirtImportProviderTestCase(test_base.CoriolisBaseTestCase):
         mock_system.clusters_service.side_effect = Exception("skip clusters")
 
         res = self.provider._create_minion_vm(
-            mock_conn, "cluster-id",
-            {"minion_template_name": "custom-template"})
+            mock_conn, "cluster-id", {"minion_template_name": "custom-template"})
 
         self.assertEqual(mock_vm, res)
         mock_vms_service.add.assert_called_once()
         added_vm = mock_vms_service.add.call_args[1]['vm']
         self.assertEqual("custom-template", added_vm.template.name)
+
+    @mock.patch('time.sleep', mock.MagicMock())
+    def test_deploy_replica_instance_default(self):
+        from ovirtsdk4 import types
+        mock_conn = mock.MagicMock()
+        mock_system = mock_conn.system_service.return_value
+        mock_vms_service = mock_system.vms_service.return_value
+        mock_vm = mock.MagicMock()
+        mock_vm.id = "test-vm-id"
+        mock_vms_service.add.return_value = mock_vm
+
+        # Mock VM services
+        mock_vm_svc = mock_vms_service.vm_service.return_value
+        mock_vm_svc.get.return_value = mock.MagicMock(status=types.VmStatus.UP)
+
+        export_info = {
+            "memory_mb": 2048,
+            "num_cpu": 2,
+            "firmware_type": "BIOS",
+            "devices": {
+                "nics": [
+                    {
+                        "name": "nic1",
+                        "mac_address": "00:11:22:33:44:55",
+                        "network_name": "net1",
+                    }
+                ]
+            }
+        }
+        target_environment = {
+            "cluster_id": "cluster-id",
+            "storage_domain_id": "sd-id",
+            "network_map": {"net1": "target-net1-id"},
+        }
+        volumes_info = [{"volume_id": "vol-id", "size_bytes": 1024**3}]
+
+        res = self.provider._deploy_replica_instance_inner(
+            mock_conn, mock.MagicMock(), target_environment, "test-vm",
+            export_info, volumes_info, clone_disks=False)
+
+        self.assertEqual(
+            "test-vm-id", res["instance_deployment_info"]["vm_id"])
+        mock_vms_service.add.assert_called_once()
+        added_vm = mock_vms_service.add.call_args[1]['vm']
+        self.assertEqual(1, len(added_vm.nics))
+        self.assertIsNone(added_vm.nics[0].mac)
+
+    @mock.patch('time.sleep', mock.MagicMock())
+    def test_deploy_replica_instance_preserve_mac(self):
+        from ovirtsdk4 import types
+        mock_conn = mock.MagicMock()
+        mock_system = mock_conn.system_service.return_value
+        mock_vms_service = mock_system.vms_service.return_value
+        mock_vm = mock.MagicMock()
+        mock_vm.id = "test-vm-id"
+        mock_vms_service.add.return_value = mock_vm
+
+        # Mock VM services
+        mock_vm_svc = mock_vms_service.vm_service.return_value
+        mock_vm_svc.get.return_value = mock.MagicMock(status=types.VmStatus.UP)
+
+        export_info = {
+            "memory_mb": 2048,
+            "num_cpu": 2,
+            "firmware_type": "BIOS",
+            "devices": {
+                "nics": [
+                    {
+                        "name": "nic1",
+                        "mac_address": "00:11:22:33:44:55",
+                        "network_name": "net1",
+                    }
+                ]
+            }
+        }
+        target_environment = {
+            "cluster_id": "cluster-id",
+            "storage_domain_id": "sd-id",
+            "network_map": {"net1": "target-net1-id"},
+            "preserve_mac_addresses": True,
+        }
+        volumes_info = [{"volume_id": "vol-id", "size_bytes": 1024**3}]
+
+        res = self.provider._deploy_replica_instance_inner(
+            mock_conn, mock.MagicMock(), target_environment, "test-vm",
+            export_info, volumes_info, clone_disks=False)
+
+        self.assertEqual(
+            "test-vm-id", res["instance_deployment_info"]["vm_id"])
+        mock_vms_service.add.assert_called_once()
+        added_vm = mock_vms_service.add.call_args[1]['vm']
+        self.assertEqual(1, len(added_vm.nics))
+        self.assertIsNotNone(added_vm.nics[0].mac)
+        self.assertEqual("00:11:22:33:44:55", added_vm.nics[0].mac.address)

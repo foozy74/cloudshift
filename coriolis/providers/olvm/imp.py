@@ -481,6 +481,12 @@ class OLVMoVirtImportProvider(
                     "description": (
                         "Source-Netzwerk zu Target-Netzwerk Mapping"),
                 },
+                "preserve_mac_addresses": {
+                    "type": "boolean",
+                    "description": (
+                        "True, wenn die MAC-Adressen der Quell-VM beibehalten "
+                        "werden sollen."),
+                },
             },
             "required": ["cluster_id", "storage_domain_id"],
         }
@@ -1075,6 +1081,12 @@ class OLVMoVirtImportProvider(
                 c if c.isalnum() or c in "-_." else "_"
                 for c in raw_nic_name)[:15]
 
+            mac_obj = None
+            if target_environment.get("preserve_mac_addresses", False):
+                mac_addr = nic.get("mac_address")
+                if mac_addr:
+                    mac_obj = sdk.types.Mac(address=mac_addr)
+
             if dst_net:
                 target_nics.append(
                     sdk.types.Nic(
@@ -1082,6 +1094,7 @@ class OLVMoVirtImportProvider(
                         interface=sdk.types.NicInterface.VIRTIO,
                         vnic_profile=sdk.types.VnicProfile(
                             id=dst_net),
+                        mac=mac_obj,
                     )
                 )
             else:
@@ -1090,6 +1103,7 @@ class OLVMoVirtImportProvider(
                     sdk.types.Nic(
                         name=nic_name,
                         interface=sdk.types.NicInterface.VIRTIO,
+                        mac=mac_obj,
                     )
                 )
 
