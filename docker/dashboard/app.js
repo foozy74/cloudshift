@@ -148,7 +148,11 @@ const TRANSLATIONS = {
         "alert-error-config-load": "Fehler beim Laden der Konfiguration",
         "alert-error-config-save": "Fehler beim Speichern der Konfiguration",
         "title-configs-editor": "Konfigurations-Editor",
-        "title-faq-section": "Häufig gestellte Fragen"
+        "title-faq-section": "Häufig gestellte Fragen",
+        "modal-exec-title": "Replikation starten",
+        "label-exec-shutdown": "Quell-VM herunterfahren (Konsistenter Transfer)",
+        "label-exec-autodeploy": "Cutover automatisch nach Abschluss ausführen",
+        "btn-start": "Starten"
     },
     en: {
         "nav-dashboard": "Dashboard",
@@ -295,13 +299,18 @@ const TRANSLATIONS = {
         "alert-error-config-load": "Error loading configuration",
         "alert-error-config-save": "Error saving configuration",
         "title-configs-editor": "Configuration Editor",
-        "title-faq-section": "Frequently Asked Questions"
+        "title-faq-section": "Frequently Asked Questions",
+        "modal-exec-title": "Start Replication",
+        "label-exec-shutdown": "Shutdown source VM (Consistent transfer)",
+        "label-exec-autodeploy": "Auto deploy target VM after completion",
+        "btn-start": "Start"
     }
 };
 
 let currentLang = localStorage.getItem('coriolis_lang') || (navigator.language.startsWith('de') ? 'de' : 'en');
 let registeredEndpoints = [];
 let editingEndpointId = null;
+let activeTransferId = null;
 let expandedTransferIds = [];
 let lastTransfersData = [];
 let lastEndpointsData = [];
@@ -565,6 +574,17 @@ function setupModals() {
             tfModal.classList.remove('active');
         });
     });
+
+    const execModal = document.getElementById('executionModal');
+    const btnExecClose = document.getElementById('btnChooseExecutionClose');
+    const btnCancelExec = document.getElementById('btnCancelExecution');
+    [btnExecClose, btnCancelExec].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                closeExecutionModal();
+            });
+        }
+    });
 }
 
 // Form Handlers & Field Toggles
@@ -783,6 +803,18 @@ function setupForms() {
                 destInput.placeholder = targetDomain || getTranslation('placeholder-dest-store') || 'z.B. data';
             }
         });
+    });
+
+    // Submit Execution Form
+    document.getElementById('executionForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const shutdown = document.getElementById('execShutdown').checked;
+        const autoDeploy = document.getElementById('execAutoDeploy').checked;
+        const id = activeTransferId;
+        closeExecutionModal();
+        if (id) {
+            await executeTransfer(id, shutdown, autoDeploy);
+        }
     });
 }
 
@@ -1026,7 +1058,7 @@ function renderTransfersTable(transfers, endpoints) {
             } else {
                 actionsHtml = `
                     <div class="action-buttons">
-                        <button class="btn btn-success" onclick="executeTransfer('${tf.id}')">${getTranslation('btn-replication')}</button>
+                        <button class="btn btn-success" onclick="openExecutionModal('${tf.id}')">${getTranslation('btn-replication')}</button>
                         <button class="btn btn-primary" onclick="deployTransfer('${tf.id}')">${getTranslation('btn-cutover')}</button>
                         <button class="btn btn-danger" onclick="deleteTransfer('${tf.id}')">${getTranslation('btn-delete')}</button>
                     </div>
@@ -1190,7 +1222,20 @@ async function deleteService(id) {
 }
 
 // Action Trigger
-async function executeTransfer(id) {
+function openExecutionModal(id) {
+    activeTransferId = id;
+    document.getElementById('execShutdown').checked = false;
+    document.getElementById('execAutoDeploy').checked = false;
+    document.getElementById('executionModal').classList.add('active');
+}
+
+function closeExecutionModal() {
+    activeTransferId = null;
+    document.getElementById('executionForm').reset();
+    document.getElementById('executionModal').classList.remove('active');
+}
+
+async function executeTransfer(id, shutdown = false, autoDeploy = false) {
     try {
         const res = await fetch(`${API_BASE}/transfers/${id}/executions`, {
             method: 'POST',
@@ -1200,8 +1245,8 @@ async function executeTransfer(id) {
             },
             body: JSON.stringify({
                 execution: {
-                    shutdown_instances: false,
-                    auto_deploy: false
+                    shutdown_instances: shutdown,
+                    auto_deploy: autoDeploy
                 }
             })
         });
