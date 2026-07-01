@@ -183,7 +183,7 @@
         "summary": "Start a replication execution",
         "operationId": "createExecution",
         "parameters": [{ "name": "transfer_id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "shutdown_instances": { "type": "boolean", "default": false }, "auto_deploy": { "type": "boolean", "default": false } } } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "execution": { "type": "object", "properties": { "shutdown_instances": { "type": "boolean", "default": false }, "auto_deploy": { "type": "boolean", "default": false } } } }, "required": ["execution"] } } } },
         "responses": { "201": { "description": "Execution started" } }
       }
     },
