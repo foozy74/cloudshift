@@ -314,6 +314,8 @@ let activeTransferId = null;
 let expandedTransferIds = [];
 let lastTransfersData = [];
 let lastEndpointsData = [];
+let lastDeploymentsData = [];
+let fetchedDeploymentDetails = {};
 
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
@@ -927,11 +929,34 @@ async function refreshAllData() {
         lastEndpointsData = endpoints;
         const transfers = await fetchList('transfers?include_task_info=true');
         lastTransfersData = transfers;
+        const deployments = await fetchList('deployments');
+        lastDeploymentsData = deployments;
         const services = await fetchList('services');
+
+        // Refresh expanded deployment details in the background
+        for (const id of expandedTransferIds) {
+            const transferDeployments = (deployments || [])
+                .filter(d => d.transfer_id === id)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const latestDeployment = transferDeployments[0];
+            if (latestDeployment) {
+                try {
+                    const res = await fetch(`${API_BASE}/deployments/${latestDeployment.id}`, {
+                        headers: { 'X-Project-Id': 'admin' }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        fetchedDeploymentDetails[id] = data.deployment;
+                    }
+                } catch (err) {
+                    console.error("Error refreshing deployment details:", err);
+                }
+            }
+        }
 
         updateDashboardStats(endpoints, transfers, services);
         renderEndpointsGrid(endpoints);
-        renderTransfersTable(transfers, endpoints);
+        renderTransfersTable(transfers, endpoints, deployments);
         renderServicesTable(services);
     } catch (err) {
         console.error("Error refreshing data:", err);
@@ -1023,7 +1048,7 @@ function renderEndpointsGrid(endpoints) {
 }
 
 // Render Transfers
-function renderTransfersTable(transfers, endpoints) {
+function renderTransfersTable(transfers, endpoints, deployments = []) {
     const tableBody = document.querySelector('#transfersTable tbody');
     const recentTableBody = document.querySelector('#recentTransfersTable tbody');
 
@@ -1037,10 +1062,34 @@ function renderTransfersTable(transfers, endpoints) {
             const destEp = endpoints.find(e => e.id === tf.destination_endpoint_id);
             const sourceName = sourceEp ? sourceEp.name : getTranslation('status-unknown');
             const destName = destEp ? destEp.name : getTranslation('status-unknown');
-            const status = tf.status || tf.last_execution_status || 'PENDING';
+
+            // Find all deployments for this transfer, sort by created_at descending (latest first)
+            const transferDeployments = (deployments || [])
+                .filter(d => d.transfer_id === tf.id)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const latestDeployment = transferDeployments[0];
+
+            let status = tf.status || tf.last_execution_status || 'PENDING';
+            let isDeploying = false;
+            let displayStatus = status;
             let statusStyleClass = status.toLowerCase();
-            if (statusStyleClass === 'unexecuted') {
-                statusStyleClass = 'pending';
+
+            if (latestDeployment) {
+                if (latestDeployment.last_execution_status === 'RUNNING' || latestDeployment.last_execution_status === 'PENDING' || latestDeployment.last_execution_status === 'CANCELLING') {
+                    displayStatus = 'DEPLOYING';
+                    statusStyleClass = 'running';
+                    isDeploying = true;
+                } else if (latestDeployment.last_execution_status === 'COMPLETED') {
+                    displayStatus = 'DEPLOYED';
+                    statusStyleClass = 'completed';
+                } else if (latestDeployment.last_execution_status === 'ERROR' || latestDeployment.last_execution_status === 'FAILED') {
+                    displayStatus = 'DEPLOY_FAILED';
+                    statusStyleClass = 'failed';
+                }
+            } else {
+                if (statusStyleClass === 'unexecuted') {
+                    statusStyleClass = 'pending';
+                }
             }
             const statusClass = `status-${statusStyleClass}`;
 
@@ -1053,7 +1102,7 @@ function renderTransfersTable(transfers, endpoints) {
             `;
 
             let actionsHtml = '';
-            if (status === 'RUNNING' || status === 'CANCELLING') {
+            if (status === 'RUNNING' || status === 'CANCELLING' || isDeploying) {
                 actionsHtml = `<span class="text-muted">${getTranslation('msg-action-running')}</span>`;
             } else {
                 actionsHtml = `
@@ -1067,18 +1116,18 @@ function renderTransfersTable(transfers, endpoints) {
 
             let detailsRowHtml = '';
             if (isExpanded) {
-                const execution = tf.executions && tf.executions.length > 0 ? tf.executions[tf.executions.length - 1] : null;
+                const deploymentDetails = fetchedDeploymentDetails[tf.id];
                 let executionContent = '';
-                if (!execution) {
-                    executionContent = `<p class="text-muted" style="padding:1rem;">${getTranslation('msg-no-execution')}</p>`;
-                } else {
-                    const tasks = execution.tasks || [];
+
+                if (deploymentDetails) {
+                    // Render deployment tasks
+                    const tasks = deploymentDetails.tasks || [];
                     const tasksList = tasks.map(task => {
                         let badgeClass = 'status-pending';
                         if (task.status === 'COMPLETED') badgeClass = 'status-completed';
                         else if (task.status === 'RUNNING') badgeClass = 'status-running';
                         else if (task.status === 'FAILED') badgeClass = 'status-failed';
-                        
+
                         let excDetails = '';
                         if (task.exception_details) {
                             excDetails = `
@@ -1087,7 +1136,14 @@ function renderTransfersTable(transfers, endpoints) {
                                 </div>
                             `;
                         }
-                        
+
+                        // Parse progress updates
+                        let progressHtml = '';
+                        if (task.progress_updates && task.progress_updates.length > 0) {
+                            const latestUpdate = task.progress_updates[task.progress_updates.length - 1];
+                            progressHtml = `<div class="task-progress-msg" style="margin-top:0.25rem; font-size:0.8rem; color:var(--text-dim); padding-left:0.5rem; border-left:2px solid var(--accent-cyan);">${escapeHtml(latestUpdate.message)}</div>`;
+                        }
+
                         return `
                             <div class="task-step-item">
                                 <div class="task-step-header">
@@ -1095,16 +1151,57 @@ function renderTransfersTable(transfers, endpoints) {
                                     <span class="task-step-name">${escapeHtml(task.task_type)}</span>
                                     <span class="task-step-time">${task.updated_at ? new Date(task.updated_at + 'Z').toLocaleString() : ''}</span>
                                 </div>
+                                ${progressHtml}
                                 ${excDetails}
                             </div>
                         `;
                     }).join('');
                     executionContent = `
                         <div class="execution-details-expanded-box">
-                            <h4 style="margin-bottom:0.75rem; font-size:0.95rem; font-weight:600;">${getTranslation('title-execution')} #${execution.number} (ID: <code>${execution.id}</code>)</h4>
+                            <h4 style="margin-bottom:0.75rem; font-size:0.95rem; font-weight:600;">Deployment (ID: <code>${deploymentDetails.id}</code>)</h4>
                             <div class="tasks-steps-list">${tasksList}</div>
                         </div>
                     `;
+                } else {
+                    // Fall back to replication executions
+                    const execution = tf.executions && tf.executions.length > 0 ? tf.executions[tf.executions.length - 1] : null;
+                    if (!execution) {
+                        executionContent = `<p class="text-muted" style="padding:1rem;">${getTranslation('msg-no-execution')}</p>`;
+                    } else {
+                        const tasks = execution.tasks || [];
+                        const tasksList = tasks.map(task => {
+                            let badgeClass = 'status-pending';
+                            if (task.status === 'COMPLETED') badgeClass = 'status-completed';
+                            else if (task.status === 'RUNNING') badgeClass = 'status-running';
+                            else if (task.status === 'FAILED') badgeClass = 'status-failed';
+
+                            let excDetails = '';
+                            if (task.exception_details) {
+                                excDetails = `
+                                    <div class="task-exception-info">
+                                        <code>${escapeHtml(JSON.stringify(task.exception_details))}</code>
+                                    </div>
+                                `;
+                            }
+
+                            return `
+                                <div class="task-step-item">
+                                    <div class="task-step-header">
+                                        <span class="badge ${badgeClass}">${task.status}</span>
+                                        <span class="task-step-name">${escapeHtml(task.task_type)}</span>
+                                        <span class="task-step-time">${task.updated_at ? new Date(task.updated_at + 'Z').toLocaleString() : ''}</span>
+                                    </div>
+                                    ${excDetails}
+                                </div>
+                            `;
+                        }).join('');
+                        executionContent = `
+                            <div class="execution-details-expanded-box">
+                                <h4 style="margin-bottom:0.75rem; font-size:0.95rem; font-weight:600;">${getTranslation('title-execution')} #${execution.number} (ID: <code>${execution.id}</code>)</h4>
+                                <div class="tasks-steps-list">${tasksList}</div>
+                            </div>
+                        `;
+                    }
                 }
                 detailsRowHtml = `
                     <tr class="transfer-details-row">
@@ -1123,7 +1220,7 @@ function renderTransfersTable(transfers, endpoints) {
                     <td><strong>${escapeHtml((tf.instances || []).join(', '))}</strong></td>
                     <td>${escapeHtml(sourceName)}</td>
                     <td>${escapeHtml(destName)}</td>
-                    <td><span class="badge badge-status ${statusClass}">${status}</span></td>
+                    <td><span class="badge badge-status ${statusClass}">${displayStatus}</span></td>
                     <td>${actionsHtml}</td>
                 </tr>
                 ${detailsRowHtml}
@@ -1136,14 +1233,32 @@ function renderTransfersTable(transfers, endpoints) {
     recentTableBody.innerHTML = rowsHtml;
 }
 
-function toggleTransferDetails(id) {
+async function toggleTransferDetails(id) {
     const idx = expandedTransferIds.indexOf(id);
     if (idx > -1) {
         expandedTransferIds.splice(idx, 1);
+        renderTransfersTable(lastTransfersData, lastEndpointsData, lastDeploymentsData);
     } else {
         expandedTransferIds.push(id);
+        const transferDeployments = (lastDeploymentsData || [])
+            .filter(d => d.transfer_id === id)
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        const latestDeployment = transferDeployments[0];
+        if (latestDeployment) {
+            try {
+                const res = await fetch(`${API_BASE}/deployments/${latestDeployment.id}`, {
+                    headers: { 'X-Project-Id': 'admin' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    fetchedDeploymentDetails[id] = data.deployment;
+                }
+            } catch (err) {
+                console.error("Error fetching deployment details:", err);
+            }
+        }
+        renderTransfersTable(lastTransfersData, lastEndpointsData, lastDeploymentsData);
     }
-    renderTransfersTable(lastTransfersData, lastEndpointsData);
 }
 window.toggleTransferDetails = toggleTransferDetails;
 
