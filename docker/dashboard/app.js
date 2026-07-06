@@ -32,9 +32,23 @@ const TRANSLATIONS = {
         "modal-ep-title": "Neuen Endpunkt registrieren",
         "label-ep-name": "Endpunkt Name",
         "label-ep-type": "Endpunkt Typ",
-        "opt-ep-vmware": "VMware vSphere (Quelle)",
-        "opt-ep-olvm": "Oracle OLVM (Ziel)",
-        "opt-ep-hyperv": "Microsoft Hyper-V (Ziel)",
+        "opt-ep-vmware": "VMware vSphere",
+        "opt-ep-olvm": "Oracle OLVM",
+        "opt-ep-hyperv": "Microsoft Hyper-V",
+        "opt-ep-proxmox": "Proxmox VE",
+        "label-proxmox-url": "Proxmox API URL",
+        "placeholder-proxmox-url": "https://pve.firma.local:8006/api2/json",
+        "placeholder-proxmox-user": "root@pam",
+        "label-tf-proxmox-node": "Ziel-Node (in Proxmox)",
+        "placeholder-tf-proxmox-node": "z.B. pve1",
+        "label-tf-proxmox-storage": "Ziel-Storage",
+        "placeholder-tf-proxmox-storage": "z.B. local-lvm",
+        "label-tf-datacenter": "Ziel-Datacenter (in vSphere)",
+        "placeholder-tf-datacenter": "z.B. Datacenter",
+        "label-tf-cluster-compute": "Ziel-Cluster",
+        "placeholder-tf-cluster-compute": "z.B. Cluster",
+        "label-tf-datastore": "Ziel-Datastore",
+        "placeholder-tf-datastore": "z.B. datastore1",
         "label-vcenter-host": "vCenter Host / IP",
         "label-username": "Benutzername",
         "label-password": "Passwort",
@@ -49,10 +63,10 @@ const TRANSLATIONS = {
         "btn-register": "Registrieren",
         
         "modal-tf-title": "Migration erstellen",
-        "label-tf-source": "Quelle (VMware Endpunkt)",
-        "label-tf-dest": "Ziel (OLVM Endpunkt)",
+        "label-tf-source": "Quell-Endpunkt",
+        "label-tf-dest": "Ziel-Endpunkt",
         "label-tf-hyperv-dest": "Ziel (Hyper-V Endpunkt)",
-        "label-tf-vms": "VM Name (im vCenter)",
+        "label-tf-vms": "VM Name (im Quellsystem)",
         "label-tf-cluster": "Ziel-Cluster (in OLVM)",
         "label-tf-storage": "Ziel-Storage Domain",
         "label-tf-network": "Netzwerk-Zuweisung (Quell-Netz -> Ziel-Netz)",
@@ -126,6 +140,7 @@ const TRANSLATIONS = {
         "badge-vmware": "VMware vSphere",
         "badge-olvm": "Oracle OLVM",
         "badge-hyperv": "Microsoft Hyper-V",
+        "badge-proxmox": "Proxmox VE",
         "ep-created-via-dashboard": "Endpunkt registriert via Dashboard",
                 "status-up": "Aktiv (UP)",
         "status-down": "Down",
@@ -148,11 +163,7 @@ const TRANSLATIONS = {
         "alert-error-config-load": "Fehler beim Laden der Konfiguration",
         "alert-error-config-save": "Fehler beim Speichern der Konfiguration",
         "title-configs-editor": "Konfigurations-Editor",
-        "title-faq-section": "Häufig gestellte Fragen",
-        "modal-exec-title": "Replikation starten",
-        "label-exec-shutdown": "Quell-VM herunterfahren (Konsistenter Transfer)",
-        "label-exec-autodeploy": "Cutover automatisch nach Abschluss ausführen",
-        "btn-start": "Starten"
+        "title-faq-section": "Häufig gestellte Fragen"
     },
     en: {
         "nav-dashboard": "Dashboard",
@@ -183,9 +194,23 @@ const TRANSLATIONS = {
         "modal-ep-title": "Register New Endpoint",
         "label-ep-name": "Endpoint Name",
         "label-ep-type": "Endpoint Type",
-        "opt-ep-vmware": "VMware vSphere (Source)",
-        "opt-ep-olvm": "Oracle OLVM (Target)",
-        "opt-ep-hyperv": "Microsoft Hyper-V (Target)",
+        "opt-ep-vmware": "VMware vSphere",
+        "opt-ep-olvm": "Oracle OLVM",
+        "opt-ep-hyperv": "Microsoft Hyper-V",
+        "opt-ep-proxmox": "Proxmox VE",
+        "label-proxmox-url": "Proxmox API URL",
+        "placeholder-proxmox-url": "https://pve.company.local:8006/api2/json",
+        "placeholder-proxmox-user": "root@pam",
+        "label-tf-proxmox-node": "Target Node (in Proxmox)",
+        "placeholder-tf-proxmox-node": "e.g. pve1",
+        "label-tf-proxmox-storage": "Target Storage",
+        "placeholder-tf-proxmox-storage": "e.g. local-lvm",
+        "label-tf-datacenter": "Target Datacenter (in vSphere)",
+        "placeholder-tf-datacenter": "e.g. Datacenter",
+        "label-tf-cluster-compute": "Target Cluster",
+        "placeholder-tf-cluster-compute": "e.g. Cluster",
+        "label-tf-datastore": "Target Datastore",
+        "placeholder-tf-datastore": "e.g. datastore1",
         "label-vcenter-host": "vCenter Host / IP",
         "label-username": "Username",
         "label-password": "Password",
@@ -200,10 +225,10 @@ const TRANSLATIONS = {
         "btn-register": "Register",
         
         "modal-tf-title": "Create Migration",
-        "label-tf-source": "Source (VMware Endpoint)",
-        "label-tf-dest": "Target (OLVM Endpoint)",
+        "label-tf-source": "Source Endpoint",
+        "label-tf-dest": "Target Endpoint",
         "label-tf-hyperv-dest": "Target (Hyper-V Endpoint)",
-        "label-tf-vms": "VM Name (in vCenter)",
+        "label-tf-vms": "VM Name (in source platform)",
         "label-tf-cluster": "Target Cluster (in OLVM)",
         "label-tf-storage": "Target Storage Domain",
         "label-tf-network": "Network Mapping (Source Net -> Target Net)",
@@ -277,6 +302,7 @@ const TRANSLATIONS = {
         "badge-vmware": "VMware vSphere",
         "badge-olvm": "Oracle OLVM",
         "badge-hyperv": "Microsoft Hyper-V",
+        "badge-proxmox": "Proxmox VE",
         "ep-created-via-dashboard": "Endpoint registered via Dashboard",
         "status-up": "Active (UP)",
         "status-down": "Down",
@@ -299,23 +325,16 @@ const TRANSLATIONS = {
         "alert-error-config-load": "Error loading configuration",
         "alert-error-config-save": "Error saving configuration",
         "title-configs-editor": "Configuration Editor",
-        "title-faq-section": "Frequently Asked Questions",
-        "modal-exec-title": "Start Replication",
-        "label-exec-shutdown": "Shutdown source VM (Consistent transfer)",
-        "label-exec-autodeploy": "Auto deploy target VM after completion",
-        "btn-start": "Start"
+        "title-faq-section": "Frequently Asked Questions"
     }
 };
 
 let currentLang = localStorage.getItem('coriolis_lang') || (navigator.language.startsWith('de') ? 'de' : 'en');
 let registeredEndpoints = [];
 let editingEndpointId = null;
-let activeTransferId = null;
 let expandedTransferIds = [];
 let lastTransfersData = [];
 let lastEndpointsData = [];
-let lastDeploymentsData = [];
-let fetchedDeploymentDetails = {};
 
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
@@ -476,37 +495,40 @@ function editEndpoint(id) {
     const vmwareFields = document.getElementById('vmwareFields');
     const olvmFields = document.getElementById('olvmFields');
     const hypervFields = document.getElementById('hypervFields');
+    const proxmoxFields = document.getElementById('proxmoxFields');
+
+    vmwareFields.classList.add('hidden');
+    olvmFields.classList.add('hidden');
+    hypervFields.classList.add('hidden');
+    proxmoxFields.classList.add('hidden');
 
     if (ep.type === 'vmware_vsphere') {
         vmwareFields.classList.remove('hidden');
-        olvmFields.classList.add('hidden');
-        hypervFields.classList.add('hidden');
-
         document.getElementById('vmwareHost').value = ep.connection_info.host || '';
         document.getElementById('vmwareUser').value = ep.connection_info.username || '';
         document.getElementById('vmwarePass').value = ep.connection_info.password || '';
         document.getElementById('vmwareUntrusted').checked = !!ep.connection_info.allow_untrusted;
     } else if (ep.type === 'olvm') {
-        vmwareFields.classList.add('hidden');
         olvmFields.classList.remove('hidden');
-        hypervFields.classList.add('hidden');
-
         document.getElementById('olvmUrl').value = ep.connection_info.url || '';
         document.getElementById('olvmUser').value = ep.connection_info.username || '';
         document.getElementById('olvmPass').value = ep.connection_info.password || '';
         document.getElementById('olvmInsecure').checked = !!ep.connection_info.insecure;
     } else if (ep.type === 'hyperv') {
-        vmwareFields.classList.add('hidden');
-        olvmFields.classList.add('hidden');
         hypervFields.classList.remove('hidden');
-
         document.getElementById('hypervHost').value = ep.connection_info.host || '';
         document.getElementById('hypervPort').value = ep.connection_info.port || 5986;
         document.getElementById('hypervUser').value = ep.connection_info.username || '';
         document.getElementById('hypervPass').value = ep.connection_info.password || '';
-        document.getElementById('hypervHttps').checked = ep.connection_info.https !== false;  // default true
-        document.getElementById('hypervInsecure').checked = ep.connection_info.cert_validation === 'ignore';  // default 'ignore'
+        document.getElementById('hypervHttps').checked = ep.connection_info.https !== false;
+        document.getElementById('hypervInsecure').checked = ep.connection_info.cert_validation === 'ignore';
         document.getElementById('hypervTransport').value = ep.connection_info.transport || 'ntlm';
+    } else if (ep.type === 'proxmox') {
+        proxmoxFields.classList.remove('hidden');
+        document.getElementById('proxmoxUrl').value = ep.connection_info.url || '';
+        document.getElementById('proxmoxUser').value = ep.connection_info.username || '';
+        document.getElementById('proxmoxPass').value = ep.connection_info.password || '';
+        document.getElementById('proxmoxInsecure').checked = !!ep.connection_info.insecure;
     }
 
     // Open modal
@@ -527,18 +549,21 @@ function resetEndpointModal() {
     const vmwareFields = document.getElementById('vmwareFields');
     const olvmFields = document.getElementById('olvmFields');
     const hypervFields = document.getElementById('hypervFields');
+    const proxmoxFields = document.getElementById('proxmoxFields');
+
+    vmwareFields.classList.add('hidden');
+    olvmFields.classList.add('hidden');
+    hypervFields.classList.add('hidden');
+    proxmoxFields.classList.add('hidden');
+
     if (epType.value === 'vmware_vsphere') {
         vmwareFields.classList.remove('hidden');
-        olvmFields.classList.add('hidden');
-        hypervFields.classList.add('hidden');
     } else if (epType.value === 'olvm') {
-        vmwareFields.classList.add('hidden');
         olvmFields.classList.remove('hidden');
-        hypervFields.classList.add('hidden');
-    } else {
-        vmwareFields.classList.add('hidden');
-        olvmFields.classList.add('hidden');
+    } else if (epType.value === 'hyperv') {
         hypervFields.classList.remove('hidden');
+    } else if (epType.value === 'proxmox') {
+        proxmoxFields.classList.remove('hidden');
     }
 }
 
@@ -576,17 +601,6 @@ function setupModals() {
             tfModal.classList.remove('active');
         });
     });
-
-    const execModal = document.getElementById('executionModal');
-    const btnExecClose = document.getElementById('btnChooseExecutionClose');
-    const btnCancelExec = document.getElementById('btnCancelExecution');
-    [btnExecClose, btnCancelExec].forEach(btn => {
-        if (btn) {
-            btn.addEventListener('click', () => {
-                closeExecutionModal();
-            });
-        }
-    });
 }
 
 // Form Handlers & Field Toggles
@@ -596,19 +610,21 @@ function setupForms() {
     const olvmFields = document.getElementById('olvmFields');
     const hypervFields = document.getElementById('hypervFields');
 
+    const proxmoxFields = document.getElementById('proxmoxFields');
     epType.addEventListener('change', () => {
+        vmwareFields.classList.add('hidden');
+        olvmFields.classList.add('hidden');
+        hypervFields.classList.add('hidden');
+        proxmoxFields.classList.add('hidden');
+
         if (epType.value === 'vmware_vsphere') {
             vmwareFields.classList.remove('hidden');
-            olvmFields.classList.add('hidden');
-            hypervFields.classList.add('hidden');
         } else if (epType.value === 'olvm') {
-            vmwareFields.classList.add('hidden');
             olvmFields.classList.remove('hidden');
-            hypervFields.classList.add('hidden');
-        } else {
-            vmwareFields.classList.add('hidden');
-            olvmFields.classList.add('hidden');
+        } else if (epType.value === 'hyperv') {
             hypervFields.classList.remove('hidden');
+        } else if (epType.value === 'proxmox') {
+            proxmoxFields.classList.remove('hidden');
         }
     });
 
@@ -633,7 +649,7 @@ function setupForms() {
                 password: document.getElementById('olvmPass').value,
                 insecure: document.getElementById('olvmInsecure').checked
             };
-        } else {
+        } else if (type === 'hyperv') {
             connectionInfo = {
                 host: document.getElementById('hypervHost').value,
                 port: parseInt(document.getElementById('hypervPort').value),
@@ -642,6 +658,13 @@ function setupForms() {
                 https: document.getElementById('hypervHttps').checked,
                 cert_validation: document.getElementById('hypervInsecure').checked ? 'ignore' : 'validate',
                 transport: document.getElementById('hypervTransport').value
+            };
+        } else if (type === 'proxmox') {
+            connectionInfo = {
+                url: document.getElementById('proxmoxUrl').value,
+                username: document.getElementById('proxmoxUser').value,
+                password: document.getElementById('proxmoxPass').value,
+                insecure: document.getElementById('proxmoxInsecure').checked
             };
         }
 
@@ -710,7 +733,19 @@ function setupForms() {
 
     let storage_mappings = {};
     const backend_mappings = [];
-    const defaultDestDomain = document.getElementById('transferStorageDomain').value.trim();
+    let defaultDestDomain = '';
+    const olvmStorageInput = document.getElementById('transferStorageDomain');
+    const proxmoxStorageInput = document.getElementById('transferProxmoxStorage');
+    const vmwareDatastoreInput = document.getElementById('transferDatastore');
+
+    if (olvmStorageInput && olvmStorageInput.value) {
+        defaultDestDomain = olvmStorageInput.value.trim();
+    } else if (proxmoxStorageInput && proxmoxStorageInput.value) {
+        defaultDestDomain = proxmoxStorageInput.value.trim();
+    } else if (vmwareDatastoreInput && vmwareDatastoreInput.value) {
+        defaultDestDomain = vmwareDatastoreInput.value.trim();
+    }
+
     document.querySelectorAll('.storage-mapping-row').forEach(row => {
         const srcInput = row.querySelector('.source-store');
         const destInput = row.querySelector('.dest-store');
@@ -752,6 +787,19 @@ function setupForms() {
                 default_switch: document.getElementById('transferSwitch').value.trim(),
                 vm_path: document.getElementById('transferVmPath').value.trim(),
                 vm_generation: document.getElementById('transferVmGeneration').value ? parseInt(document.getElementById('transferVmGeneration').value) : undefined,
+                preserve_mac_addresses
+            };
+        } else if (destEndpoint && destEndpoint.type === 'proxmox') {
+            destination_environment = {
+                node: document.getElementById('transferProxmoxNode').value.trim(),
+                storage: document.getElementById('transferProxmoxStorage').value.trim(),
+                preserve_mac_addresses
+            };
+        } else if (destEndpoint && destEndpoint.type === 'vmware_vsphere') {
+            destination_environment = {
+                datacenter: document.getElementById('transferDatacenter').value.trim(),
+                cluster: document.getElementById('transferClusterCompute').value.trim(),
+                datastore: document.getElementById('transferDatastore').value.trim(),
                 preserve_mac_addresses
             };
         }
@@ -805,18 +853,6 @@ function setupForms() {
                 destInput.placeholder = targetDomain || getTranslation('placeholder-dest-store') || 'z.B. data';
             }
         });
-    });
-
-    // Submit Execution Form
-    document.getElementById('executionForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const shutdown = document.getElementById('execShutdown').checked;
-        const autoDeploy = document.getElementById('execAutoDeploy').checked;
-        const id = activeTransferId;
-        closeExecutionModal();
-        if (id) {
-            await executeTransfer(id, shutdown, autoDeploy);
-        }
     });
 }
 
@@ -929,34 +965,11 @@ async function refreshAllData() {
         lastEndpointsData = endpoints;
         const transfers = await fetchList('transfers?include_task_info=true');
         lastTransfersData = transfers;
-        const deployments = await fetchList('deployments');
-        lastDeploymentsData = deployments;
         const services = await fetchList('services');
-
-        // Refresh expanded deployment details in the background
-        for (const id of expandedTransferIds) {
-            const transferDeployments = (deployments || [])
-                .filter(d => d.transfer_id === id)
-                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            const latestDeployment = transferDeployments[0];
-            if (latestDeployment) {
-                try {
-                    const res = await fetch(`${API_BASE}/deployments/${latestDeployment.id}`, {
-                        headers: { 'X-Project-Id': 'admin' }
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        fetchedDeploymentDetails[id] = data.deployment;
-                    }
-                } catch (err) {
-                    console.error("Error refreshing deployment details:", err);
-                }
-            }
-        }
 
         updateDashboardStats(endpoints, transfers, services);
         renderEndpointsGrid(endpoints);
-        renderTransfersTable(transfers, endpoints, deployments);
+        renderTransfersTable(transfers, endpoints);
         renderServicesTable(services);
     } catch (err) {
         console.error("Error refreshing data:", err);
@@ -1017,14 +1030,25 @@ function renderEndpointsGrid(endpoints) {
     }
 
      grid.innerHTML = endpoints.map(ep => {
-        const isVMware = ep.type === 'vmware_vsphere';
-        const isHyperV = ep.type === 'hyperv';
-        const typeBadge = isVMware ? `<span class="badge badge-vmware">${getTranslation('badge-vmware')}</span>` : (isHyperV ? `<span class="badge badge-hyperv">${getTranslation('badge-hyperv')}</span>` : `<span class="badge badge-olvm">${getTranslation('badge-olvm')}</span>`);
-        const detailsHtml = isVMware ? 
-            `<p><span>vCenter:</span> ${ep.connection_info.host}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>` :
-            (isHyperV ?
-            `<p><span>Hyper-V:</span> ${ep.connection_info.host}:${ep.connection_info.port}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>` :
-            `<p><span>Engine:</span> ${ep.connection_info.url}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>`);
+        let typeBadge = `<span class="badge badge-olvm">${getTranslation('badge-olvm')}</span>`;
+        if (ep.type === 'vmware_vsphere') {
+            typeBadge = `<span class="badge badge-vmware">${getTranslation('badge-vmware')}</span>`;
+        } else if (ep.type === 'hyperv') {
+            typeBadge = `<span class="badge badge-hyperv">${getTranslation('badge-hyperv')}</span>`;
+        } else if (ep.type === 'proxmox') {
+            typeBadge = `<span class="badge badge-proxmox">${getTranslation('badge-proxmox')}</span>`;
+        }
+
+        let detailsHtml = '';
+        if (ep.type === 'vmware_vsphere') {
+            detailsHtml = `<p><span>vCenter:</span> ${ep.connection_info.host}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>`;
+        } else if (ep.type === 'hyperv') {
+            detailsHtml = `<p><span>Hyper-V:</span> ${ep.connection_info.host}:${ep.connection_info.port}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>`;
+        } else if (ep.type === 'olvm') {
+            detailsHtml = `<p><span>Engine:</span> ${ep.connection_info.url}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>`;
+        } else if (ep.type === 'proxmox') {
+            detailsHtml = `<p><span>Proxmox API:</span> ${ep.connection_info.url}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>`;
+        }
 
         return `
             <div class="endpoint-card">
@@ -1048,7 +1072,7 @@ function renderEndpointsGrid(endpoints) {
 }
 
 // Render Transfers
-function renderTransfersTable(transfers, endpoints, deployments = []) {
+function renderTransfersTable(transfers, endpoints) {
     const tableBody = document.querySelector('#transfersTable tbody');
     const recentTableBody = document.querySelector('#recentTransfersTable tbody');
 
@@ -1062,34 +1086,10 @@ function renderTransfersTable(transfers, endpoints, deployments = []) {
             const destEp = endpoints.find(e => e.id === tf.destination_endpoint_id);
             const sourceName = sourceEp ? sourceEp.name : getTranslation('status-unknown');
             const destName = destEp ? destEp.name : getTranslation('status-unknown');
-
-            // Find all deployments for this transfer, sort by created_at descending (latest first)
-            const transferDeployments = (deployments || [])
-                .filter(d => d.transfer_id === tf.id)
-                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            const latestDeployment = transferDeployments[0];
-
-            let status = tf.status || tf.last_execution_status || 'PENDING';
-            let isDeploying = false;
-            let displayStatus = status;
+            const status = tf.status || tf.last_execution_status || 'PENDING';
             let statusStyleClass = status.toLowerCase();
-
-            if (latestDeployment) {
-                if (latestDeployment.last_execution_status === 'RUNNING' || latestDeployment.last_execution_status === 'PENDING' || latestDeployment.last_execution_status === 'CANCELLING') {
-                    displayStatus = 'DEPLOYING';
-                    statusStyleClass = 'running';
-                    isDeploying = true;
-                } else if (latestDeployment.last_execution_status === 'COMPLETED') {
-                    displayStatus = 'DEPLOYED';
-                    statusStyleClass = 'completed';
-                } else if (latestDeployment.last_execution_status === 'ERROR' || latestDeployment.last_execution_status === 'FAILED') {
-                    displayStatus = 'DEPLOY_FAILED';
-                    statusStyleClass = 'failed';
-                }
-            } else {
-                if (statusStyleClass === 'unexecuted') {
-                    statusStyleClass = 'pending';
-                }
+            if (statusStyleClass === 'unexecuted') {
+                statusStyleClass = 'pending';
             }
             const statusClass = `status-${statusStyleClass}`;
 
@@ -1102,12 +1102,12 @@ function renderTransfersTable(transfers, endpoints, deployments = []) {
             `;
 
             let actionsHtml = '';
-            if (status === 'RUNNING' || status === 'CANCELLING' || isDeploying) {
+            if (status === 'RUNNING' || status === 'CANCELLING') {
                 actionsHtml = `<span class="text-muted">${getTranslation('msg-action-running')}</span>`;
             } else {
                 actionsHtml = `
                     <div class="action-buttons">
-                        <button class="btn btn-success" onclick="openExecutionModal('${tf.id}')">${getTranslation('btn-replication')}</button>
+                        <button class="btn btn-success" onclick="executeTransfer('${tf.id}')">${getTranslation('btn-replication')}</button>
                         <button class="btn btn-primary" onclick="deployTransfer('${tf.id}')">${getTranslation('btn-cutover')}</button>
                         <button class="btn btn-danger" onclick="deleteTransfer('${tf.id}')">${getTranslation('btn-delete')}</button>
                     </div>
@@ -1116,18 +1116,18 @@ function renderTransfersTable(transfers, endpoints, deployments = []) {
 
             let detailsRowHtml = '';
             if (isExpanded) {
-                const deploymentDetails = fetchedDeploymentDetails[tf.id];
+                const execution = tf.executions && tf.executions.length > 0 ? tf.executions[tf.executions.length - 1] : null;
                 let executionContent = '';
-
-                if (deploymentDetails) {
-                    // Render deployment tasks
-                    const tasks = deploymentDetails.tasks || [];
+                if (!execution) {
+                    executionContent = `<p class="text-muted" style="padding:1rem;">${getTranslation('msg-no-execution')}</p>`;
+                } else {
+                    const tasks = execution.tasks || [];
                     const tasksList = tasks.map(task => {
                         let badgeClass = 'status-pending';
                         if (task.status === 'COMPLETED') badgeClass = 'status-completed';
                         else if (task.status === 'RUNNING') badgeClass = 'status-running';
                         else if (task.status === 'FAILED') badgeClass = 'status-failed';
-
+                        
                         let excDetails = '';
                         if (task.exception_details) {
                             excDetails = `
@@ -1136,14 +1136,7 @@ function renderTransfersTable(transfers, endpoints, deployments = []) {
                                 </div>
                             `;
                         }
-
-                        // Parse progress updates
-                        let progressHtml = '';
-                        if (task.progress_updates && task.progress_updates.length > 0) {
-                            const latestUpdate = task.progress_updates[task.progress_updates.length - 1];
-                            progressHtml = `<div class="task-progress-msg" style="margin-top:0.25rem; font-size:0.8rem; color:var(--text-dim); padding-left:0.5rem; border-left:2px solid var(--accent-cyan);">${escapeHtml(latestUpdate.message)}</div>`;
-                        }
-
+                        
                         return `
                             <div class="task-step-item">
                                 <div class="task-step-header">
@@ -1151,57 +1144,16 @@ function renderTransfersTable(transfers, endpoints, deployments = []) {
                                     <span class="task-step-name">${escapeHtml(task.task_type)}</span>
                                     <span class="task-step-time">${task.updated_at ? new Date(task.updated_at + 'Z').toLocaleString() : ''}</span>
                                 </div>
-                                ${progressHtml}
                                 ${excDetails}
                             </div>
                         `;
                     }).join('');
                     executionContent = `
                         <div class="execution-details-expanded-box">
-                            <h4 style="margin-bottom:0.75rem; font-size:0.95rem; font-weight:600;">Deployment (ID: <code>${deploymentDetails.id}</code>)</h4>
+                            <h4 style="margin-bottom:0.75rem; font-size:0.95rem; font-weight:600;">${getTranslation('title-execution')} #${execution.number} (ID: <code>${execution.id}</code>)</h4>
                             <div class="tasks-steps-list">${tasksList}</div>
                         </div>
                     `;
-                } else {
-                    // Fall back to replication executions
-                    const execution = tf.executions && tf.executions.length > 0 ? tf.executions[tf.executions.length - 1] : null;
-                    if (!execution) {
-                        executionContent = `<p class="text-muted" style="padding:1rem;">${getTranslation('msg-no-execution')}</p>`;
-                    } else {
-                        const tasks = execution.tasks || [];
-                        const tasksList = tasks.map(task => {
-                            let badgeClass = 'status-pending';
-                            if (task.status === 'COMPLETED') badgeClass = 'status-completed';
-                            else if (task.status === 'RUNNING') badgeClass = 'status-running';
-                            else if (task.status === 'FAILED') badgeClass = 'status-failed';
-
-                            let excDetails = '';
-                            if (task.exception_details) {
-                                excDetails = `
-                                    <div class="task-exception-info">
-                                        <code>${escapeHtml(JSON.stringify(task.exception_details))}</code>
-                                    </div>
-                                `;
-                            }
-
-                            return `
-                                <div class="task-step-item">
-                                    <div class="task-step-header">
-                                        <span class="badge ${badgeClass}">${task.status}</span>
-                                        <span class="task-step-name">${escapeHtml(task.task_type)}</span>
-                                        <span class="task-step-time">${task.updated_at ? new Date(task.updated_at + 'Z').toLocaleString() : ''}</span>
-                                    </div>
-                                    ${excDetails}
-                                </div>
-                            `;
-                        }).join('');
-                        executionContent = `
-                            <div class="execution-details-expanded-box">
-                                <h4 style="margin-bottom:0.75rem; font-size:0.95rem; font-weight:600;">${getTranslation('title-execution')} #${execution.number} (ID: <code>${execution.id}</code>)</h4>
-                                <div class="tasks-steps-list">${tasksList}</div>
-                            </div>
-                        `;
-                    }
                 }
                 detailsRowHtml = `
                     <tr class="transfer-details-row">
@@ -1220,7 +1172,7 @@ function renderTransfersTable(transfers, endpoints, deployments = []) {
                     <td><strong>${escapeHtml((tf.instances || []).join(', '))}</strong></td>
                     <td>${escapeHtml(sourceName)}</td>
                     <td>${escapeHtml(destName)}</td>
-                    <td><span class="badge badge-status ${statusClass}">${displayStatus}</span></td>
+                    <td><span class="badge badge-status ${statusClass}">${status}</span></td>
                     <td>${actionsHtml}</td>
                 </tr>
                 ${detailsRowHtml}
@@ -1233,32 +1185,14 @@ function renderTransfersTable(transfers, endpoints, deployments = []) {
     recentTableBody.innerHTML = rowsHtml;
 }
 
-async function toggleTransferDetails(id) {
+function toggleTransferDetails(id) {
     const idx = expandedTransferIds.indexOf(id);
     if (idx > -1) {
         expandedTransferIds.splice(idx, 1);
-        renderTransfersTable(lastTransfersData, lastEndpointsData, lastDeploymentsData);
     } else {
         expandedTransferIds.push(id);
-        const transferDeployments = (lastDeploymentsData || [])
-            .filter(d => d.transfer_id === id)
-            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        const latestDeployment = transferDeployments[0];
-        if (latestDeployment) {
-            try {
-                const res = await fetch(`${API_BASE}/deployments/${latestDeployment.id}`, {
-                    headers: { 'X-Project-Id': 'admin' }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    fetchedDeploymentDetails[id] = data.deployment;
-                }
-            } catch (err) {
-                console.error("Error fetching deployment details:", err);
-            }
-        }
-        renderTransfersTable(lastTransfersData, lastEndpointsData, lastDeploymentsData);
     }
+    renderTransfersTable(lastTransfersData, lastEndpointsData);
 }
 window.toggleTransferDetails = toggleTransferDetails;
 
@@ -1337,20 +1271,7 @@ async function deleteService(id) {
 }
 
 // Action Trigger
-function openExecutionModal(id) {
-    activeTransferId = id;
-    document.getElementById('execShutdown').checked = false;
-    document.getElementById('execAutoDeploy').checked = false;
-    document.getElementById('executionModal').classList.add('active');
-}
-
-function closeExecutionModal() {
-    activeTransferId = null;
-    document.getElementById('executionForm').reset();
-    document.getElementById('executionModal').classList.remove('active');
-}
-
-async function executeTransfer(id, shutdown = false, autoDeploy = false) {
+async function executeTransfer(id) {
     try {
         const res = await fetch(`${API_BASE}/transfers/${id}/executions`, {
             method: 'POST',
@@ -1360,8 +1281,8 @@ async function executeTransfer(id, shutdown = false, autoDeploy = false) {
             },
             body: JSON.stringify({
                 execution: {
-                    shutdown_instances: shutdown,
-                    auto_deploy: autoDeploy
+                    shutdown_instances: false,
+                    auto_deploy: false
                 }
             })
         });
@@ -1409,11 +1330,17 @@ async function loadEndpointsForSelect() {
         destSelect.innerHTML = `<option value="">${pleaseSelectText}</option>`;
 
         endpoints.forEach(ep => {
-            const typeLabel = ep.type === 'vmware_vsphere' ? getTranslation('badge-vmware') : (ep.type === 'hyperv' ? getTranslation('badge-hyperv') : getTranslation('badge-olvm'));
+            let typeLabel = ep.type;
+            if (ep.type === 'vmware_vsphere') typeLabel = getTranslation('badge-vmware');
+            else if (ep.type === 'olvm') typeLabel = getTranslation('badge-olvm');
+            else if (ep.type === 'hyperv') typeLabel = getTranslation('badge-hyperv');
+            else if (ep.type === 'proxmox') typeLabel = getTranslation('badge-proxmox');
+
             const opt = `<option value="${ep.id}">${escapeHtml(ep.name)} (${typeLabel})</option>`;
-            if (ep.type === 'vmware_vsphere') {
+            if (ep.type === 'vmware_vsphere' || ep.type === 'olvm') {
                 sourceSelect.innerHTML += opt;
-            } else if (ep.type === 'olvm' || ep.type === 'hyperv') {
+            }
+            if (ep.type === 'vmware_vsphere' || ep.type === 'olvm' || ep.type === 'hyperv' || ep.type === 'proxmox') {
                 destSelect.innerHTML += opt;
             }
         });
@@ -1423,15 +1350,19 @@ async function loadEndpointsForSelect() {
             const destEndpointId = destSelect.value;
             const tfOlvmFields = document.getElementById('tfOlvmFields');
             const tfHypervFields = document.getElementById('tfHypervFields');
+            const tfProxmoxFields = document.getElementById('tfProxmoxFields');
+            const tfVmwareFields = document.getElementById('tfVmwareFields');
             const tfStorageMapGroup = document.getElementById('tfStorageMapGroup');
-            // Update destination label
             const destLabel = document.querySelector('#transferDest').previousElementSibling;
             
+            tfOlvmFields.classList.add('hidden');
+            tfHypervFields.classList.add('hidden');
+            tfProxmoxFields.classList.add('hidden');
+            tfVmwareFields.classList.add('hidden');
+            tfStorageMapGroup.classList.remove('hidden');
+
             if (!destEndpointId) {
-                tfOlvmFields.classList.add('hidden');
-                tfHypervFields.classList.add('hidden');
-                tfStorageMapGroup.classList.remove('hidden'); // Show storage map when none selected
-                if (destLabel) destLabel.textContent = getTranslation('label-tf-dest'); // Reset to default
+                if (destLabel) destLabel.textContent = getTranslation('label-tf-dest');
                 return;
             }
             
@@ -1439,14 +1370,17 @@ async function loadEndpointsForSelect() {
             if (destEndpoint) {
                 if (destEndpoint.type === 'olvm') {
                     tfOlvmFields.classList.remove('hidden');
-                    tfHypervFields.classList.add('hidden');
-                    tfStorageMapGroup.classList.remove('hidden'); // OLVM uses storage mapping
-                    if (destLabel) destLabel.textContent = getTranslation('label-tf-dest'); // "Ziel (OLVM Endpunkt)"
+                    if (destLabel) destLabel.textContent = getTranslation('label-tf-dest');
                 } else if (destEndpoint.type === 'hyperv') {
-                    tfOlvmFields.classList.add('hidden');
                     tfHypervFields.classList.remove('hidden');
-                    tfStorageMapGroup.classList.add('hidden'); // Hyper-V doesn't use storage mapping
-                    if (destLabel) destLabel.textContent = getTranslation('label-tf-hyperv-dest'); // "Ziel (Hyper-V Endpunkt)"
+                    tfStorageMapGroup.classList.add('hidden');
+                    if (destLabel) destLabel.textContent = getTranslation('label-tf-hyperv-dest');
+                } else if (destEndpoint.type === 'proxmox') {
+                    tfProxmoxFields.classList.remove('hidden');
+                    if (destLabel) destLabel.textContent = "Ziel (Proxmox Endpunkt)";
+                } else if (destEndpoint.type === 'vmware_vsphere') {
+                    tfVmwareFields.classList.remove('hidden');
+                    if (destLabel) destLabel.textContent = "Ziel (VMware Endpunkt)";
                 }
             }
         });

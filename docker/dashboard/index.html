@@ -242,9 +242,10 @@
                 <div class="form-group">
                     <label for="endpointType" data-i18n="label-ep-type">Endpunkt Typ</label>
                     <select id="endpointType" required>
-                        <option value="vmware_vsphere" data-i18n="opt-ep-vmware">VMware vSphere (Quelle)</option>
-                        <option value="olvm" data-i18n="opt-ep-olvm">Oracle OLVM (Ziel)</option>
-                        <option value="hyperv" data-i18n="opt-ep-hyperv">Microsoft Hyper-V (Ziel)</option>
+                        <option value="vmware_vsphere" data-i18n="opt-ep-vmware">VMware vSphere</option>
+                        <option value="olvm" data-i18n="opt-ep-olvm">Oracle OLVM</option>
+                        <option value="hyperv" data-i18n="opt-ep-hyperv">Microsoft Hyper-V</option>
+                        <option value="proxmox" data-i18n="opt-ep-proxmox">Proxmox VE</option>
                     </select>
                 </div>
                 
@@ -323,6 +324,26 @@
                         <input type="checkbox" id="hypervInsecure" checked>
                         <label for="hypervInsecure" data-i18n="label-ignore-ssl-winrm">WinRM Zertifikat ignorieren</label>
                     </div>
+                
+                <!-- Proxmox Fields -->
+                <div id="proxmoxFields" class="provider-fields hidden">
+                    <div class="form-group">
+                        <label for="proxmoxUrl" data-i18n="label-proxmox-url">Proxmox API URL</label>
+                        <input type="text" id="proxmoxUrl" placeholder="https://pve.firma.local:8006/api2/json" data-i18n-placeholder="placeholder-proxmox-url">
+                    </div>
+                    <div class="form-group">
+                        <label for="proxmoxUser" data-i18n="label-username">Benutzername</label>
+                        <input type="text" id="proxmoxUser" placeholder="root@pam" data-i18n-placeholder="placeholder-proxmox-user">
+                    </div>
+                    <div class="form-group">
+                        <label for="proxmoxPass" data-i18n="label-password">Passwort</label>
+                        <input type="password" id="proxmoxPass">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="proxmoxInsecure" checked>
+                        <label for="proxmoxInsecure" data-i18n="label-ignore-ssl">SSL Zertifikat ignorieren (insecure)</label>
+                    </div>
+                </div>
                 </div>
 
                 <div class="form-actions">
@@ -390,6 +411,34 @@
                     </div>
                 </div>
 
+                <!-- Proxmox target fields -->
+                <div id="tfProxmoxFields" class="transfer-dest-fields hidden">
+                    <div class="form-group">
+                        <label for="transferProxmoxNode" data-i18n="label-tf-proxmox-node">Ziel-Node (in Proxmox)</label>
+                        <input type="text" id="transferProxmoxNode" placeholder="z.B. pve1" data-i18n-placeholder="placeholder-tf-proxmox-node">
+                    </div>
+                    <div class="form-group">
+                        <label for="transferProxmoxStorage" data-i18n="label-tf-proxmox-storage">Ziel-Storage</label>
+                        <input type="text" id="transferProxmoxStorage" placeholder="z.B. local-lvm" data-i18n-placeholder="placeholder-tf-proxmox-storage">
+                    </div>
+                </div>
+
+                <!-- VMware target fields -->
+                <div id="tfVmwareFields" class="transfer-dest-fields hidden">
+                    <div class="form-group">
+                        <label for="transferDatacenter" data-i18n="label-tf-datacenter">Ziel-Datacenter (in vSphere)</label>
+                        <input type="text" id="transferDatacenter" placeholder="z.B. Datacenter" data-i18n-placeholder="placeholder-tf-datacenter">
+                    </div>
+                    <div class="form-group">
+                        <label for="transferClusterCompute" data-i18n="label-tf-cluster-compute">Ziel-Cluster</label>
+                        <input type="text" id="transferClusterCompute" placeholder="z.B. Cluster" data-i18n-placeholder="placeholder-tf-cluster-compute">
+                    </div>
+                    <div class="form-group">
+                        <label for="transferDatastore" data-i18n="label-tf-datastore">Ziel-Datastore</label>
+                        <input type="text" id="transferDatastore" placeholder="z.B. datastore1" data-i18n-placeholder="placeholder-tf-datastore">
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label for="transferNetworkMap" data-i18n="label-tf-network">Netzwerk-Zuweisung (Quell-Netz -> Ziel-Netz)</label>
                     <div class="mapping-inputs">
@@ -418,31 +467,6 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="btnCancelTransfer" data-i18n="btn-cancel">Abbrechen</button>
                     <button type="submit" class="btn btn-primary" data-i18n="btn-create">Erstellen</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Start Execution -->
-    <div class="modal-overlay" id="executionModal">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h2 id="executionModalTitle" data-i18n="modal-exec-title">Replikation starten</h2>
-                <button class="btn-close" id="btnChooseExecutionClose">&times;</button>
-            </div>
-            <form id="executionForm">
-                <div class="form-group checkbox-group">
-                    <input type="checkbox" id="execShutdown">
-                    <label for="execShutdown" data-i18n="label-exec-shutdown">Quell-VM herunterfahren (Konsistenter Transfer)</label>
-                </div>
-                <div class="form-group checkbox-group">
-                    <input type="checkbox" id="execAutoDeploy">
-                    <label for="execAutoDeploy" data-i18n="label-exec-autodeploy">Cutover automatisch nach Abschluss ausführen</label>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="btnCancelExecution" data-i18n="btn-cancel">Abbrechen</button>
-                    <button type="submit" class="btn btn-success" data-i18n="btn-start">Starten</button>
                 </div>
             </form>
         </div>

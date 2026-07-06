@@ -3,29 +3,23 @@
 This Dynamic diagram illustrates the flow of automated logical network and VNIC profile creation in Oracle OLVM during a migration import task.
 
 ```mermaid
-C4Dynamic
-  title Dynamic Flow - Automated Network and VNIC Profile Provisioning on OLVM
+flowchart TD
+  vmware["VMware vSphere<br>(Source Hypervisor)"]
+  worker["Worker (coriolis-worker)"]
+  olvm["Oracle OLVM / oVirt<br>(Target Hypervisor)"]
+  logs_fs[("Migration Logs<br>(Filesystem)")]
 
-  System_Ext(vmware, "VMware vSphere", "Source hypervisor")
-  Container(worker, "Worker (coriolis-worker)", "Python", "Executes import/export tasks")
-  System_Ext(olvm, "Oracle OLVM / oVirt", "Target hypervisor engine")
-  ContainerDb(logs_fs, "Migration Logs", "Filesystem", "per-migration log file")
-
-  Rel(worker, vmware, "1. Read replica instance info & extract NIC VLAN IDs", "pyvmomi / SOAP")
-  Rel(worker, worker, "2. Check target_environment mapping for NIC network name", "In-Memory")
-  
-  Rel(worker, olvm, "3. Query existing logical networks by name in Datacenter", "REST API")
-  
-  Rel(worker, olvm, "4a. [If Network Exists with Different VLAN] Abort migration with InvalidInput error", "REST API")
-  Rel(worker, logs_fs, "4b. [If Aborted] Log migration failure event", "JSON-Lines File")
-  
-  Rel(worker, olvm, "5a. [If Network does not exist] Create logical network with VLAN ID", "REST API")
-  Rel(worker, olvm, "5b. Attach new network to Datacenter & Cluster", "REST API")
-  Rel(worker, olvm, "5c. Create VNIC Profile for the network", "REST API")
-  
-  Rel(worker, logs_fs, "6. Log 'network_provisioned' event", "JSON-Lines File")
-  Rel(worker, olvm, "7. Create VM and bind NIC to resolved/created VNIC profile", "REST API")
-  Rel(worker, logs_fs, "8. Log VM creation, disk transfer, and final duration", "JSON-Lines File")
+  worker -->|"1. Read replica info & VLAN IDs"| vmware
+  worker -->|"2. Check target_environment map"| worker
+  worker -->|"3. Query logical networks by name"| olvm
+  worker -->|"4a. Abort if Network exists with different VLAN"| olvm
+  worker -->|"4b. Log migration failure"| logs_fs
+  worker -->|"5a. Create logical network if missing"| olvm
+  worker -->|"5b. Attach network to Datacenter & Cluster"| olvm
+  worker -->|"5c. Create VNIC Profile"| olvm
+  worker -->|"6. Log network_provisioned event"| logs_fs
+  worker -->|"7. Create VM & bind NIC"| olvm
+  worker -->|"8. Log VM creation, disk transfer & duration"| logs_fs
 ```
 
 ## Detail Flow Description

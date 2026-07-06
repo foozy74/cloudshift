@@ -183,7 +183,7 @@
         "summary": "Start a replication execution",
         "operationId": "createExecution",
         "parameters": [{ "name": "transfer_id", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "execution": { "type": "object", "properties": { "shutdown_instances": { "type": "boolean", "default": false }, "auto_deploy": { "type": "boolean", "default": false } } } }, "required": ["execution"] } } } },
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "shutdown_instances": { "type": "boolean", "default": false }, "auto_deploy": { "type": "boolean", "default": false } } } } } },
         "responses": { "201": { "description": "Execution started" } }
       }
     },
@@ -276,7 +276,7 @@
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "name": { "type": "string" },
-          "type": { "type": "string", "enum": ["vmware_vsphere", "olvm", "hyperv"] },
+          "type": { "type": "string", "enum": ["vmware_vsphere", "olvm", "hyperv", "proxmox"] },
           "description": { "type": "string" },
           "connection_info": { "type": "object" }
         }
@@ -286,7 +286,7 @@
         "required": ["name", "type"],
         "properties": {
           "name": { "type": "string", "example": "vcenter-prod-01" },
-          "type": { "type": "string", "enum": ["vmware_vsphere", "olvm", "hyperv"], "example": "hyperv" },
+          "type": { "type": "string", "enum": ["vmware_vsphere", "olvm", "hyperv", "proxmox"], "example": "hyperv" },
           "description": { "type": "string" },
           "connection_info": {
             "type": "object",
@@ -320,6 +320,15 @@
                   "https": { "type": "boolean" },
                   "cert_validation": { "type": "string", "enum": ["ignore", "validate"] },
                   "transport": { "type": "string", "enum": ["ntlm", "kerberos", "credssp", "basic"] }
+                }
+              },
+              {
+                "title": "Proxmox",
+                "properties": {
+                  "url": { "type": "string" },
+                  "username": { "type": "string" },
+                  "password": { "type": "string" },
+                  "insecure": { "type": "boolean" }
                 }
               }
             ]

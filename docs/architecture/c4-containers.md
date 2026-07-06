@@ -3,63 +3,59 @@
 This Container diagram details the internal microservices structure of the CloudShift (Coriolis) platform, showing how different services interact asynchronously and how they orchestrate the migration flow.
 
 ```mermaid
-C4Container
-  title Container Diagram for CloudShift
-
-  Person(admin, "Migration Administrator", "Enterprise IT Operator or Consultant managing migrations")
-
-  System_Boundary(cloudshift_system, "CloudShift Platform") {
-    Container(dashboard, "Web Dashboard", "Nginx, Vanilla JS", "Web user interface that exposes endpoint configurations, migration jobs, and logs.")
-    Container(nginx_proxy, "API Gateway / Proxy", "Nginx", "Routes /v1/ requests transparently to the API container, serves Swagger UI documentation.")
-    Container(api_service, "API Service (coriolis-api)", "Python, WSGI/Flask", "Exposes REST API endpoints for migration operations and endpoints management.")
-    
-    ContainerDb(database, "Metadata Database", "MariaDB", "Stores endpoint definitions, job states, task executions, and transfer tracking data.")
-    ContainerQueue(message_broker, "Message Broker", "RabbitMQ (Oslo.Messaging)", "Handles asynchronous message passing and work queuing between API, Conductor, and Workers.")
-    
-    Container(conductor, "Conductor (coriolis-conductor)", "Python, TaskFlow", "Stateless orchestration service that coordinates multi-phase migration pipelines.")
-    Container(worker, "Worker (coriolis-worker)", "Python", "Executes data transfer, disk replication, and OS morphing tasks.")
-    Container(scheduler, "Scheduler (coriolis-scheduler)", "Python", "Runs scheduled transfer synchronization tasks.")
-    Container(minion_manager, "Minion Manager (coriolis-minion)", "Python", "Manages the lifecycle of temporary worker minion VMs.")
-    Container(deployer_manager, "Deployer Manager", "Python", "Manages deployment pipelines.")
-    
-    ContainerDb(logs_fs, "Migration Logs Directory", "Filesystem", "Stores per-migration structured log files (*.log) in JSON-Lines format with duration metrics.")
-  }
-
-  System_Ext(vmware, "VMware vSphere", "Source hypervisor management (vCenter/ESXi)")
-  System_Ext(olvm, "Oracle OLVM", "Destination hypervisor management (oVirt Engine)")
-  System_Ext(hyperv, "Microsoft Hyper-V", "Destination hypervisor")
-
-  Container_Boundary(minion_source_boundary, "Source Minion VM (Temporary)") {
-    Container(minion_src, "Source Minion", "Linux VM", "Reads VMDK disks from vSphere Datastore and pipes data to the target minion.")
-  }
-
-  Container_Boundary(minion_target_boundary, "Target Minion VM (Temporary)") {
-    Container(minion_tgt, "Target Minion", "Linux VM, coriolis-writer", "Receives raw chunks on port 6677 and writes them to target disks on OLVM storage.")
-  }
-
-  Rel(admin, dashboard, "Uses", "HTTPS")
-  Rel(admin, nginx_proxy, "Performs API requests / views Swagger docs", "HTTPS")
-  Rel(dashboard, nginx_proxy, "Calls API", "JSON/HTTPS")
-  Rel(nginx_proxy, api_service, "Proxies calls to /v1/", "HTTP/7667")
+flowchart TD
+  admin["Migration Administrator"]
   
-  Rel(api_service, database, "Reads/writes metadata", "SQL/SQLAlchemy")
-  Rel(api_service, message_broker, "Publishes jobs & transfers", "AMQP")
-  
-  Rel(conductor, message_broker, "Subscribes to orchestration queues", "AMQP")
-  Rel(conductor, database, "Updates job records", "SQL/SQLAlchemy")
-  
-  Rel(worker, message_broker, "Subscribes to task queues", "AMQP")
-  Rel(worker, database, "Updates task records", "SQL/SQLAlchemy")
-  Rel(worker, minion_src, "Manages & communicates with", "SSH/22")
-  Rel(worker, minion_tgt, "Manages & communicates with", "SSH/22")
-  
-  Rel(worker, vmware, "Queries metadata & deploys minion", "SOAP/pyvmomi")
-  Rel(worker, olvm, "Provisions networks, VM, & deploys minion", "REST API/ovirt-engine-sdk-python")
-  Rel(worker, hyperv, "Deploys VM & morphs OS", "WinRM/PowerShell")
-  
-  Rel(minion_src, minion_tgt, "Replicates disk chunks", "TCP/6677")
-  
-  Rel(worker, logs_fs, "Writes migration logs & tracks durations to", "File (olvm.migration_log_dir)")
+  subgraph cloudshift_system["CloudShift Platform"]
+    dashboard["Web Dashboard<br>(Nginx, Vanilla JS)"]
+    nginx_proxy["API Gateway / Proxy<br>(Nginx)"]
+    api_service["API Service<br>(coriolis-api)"]
+    database[("Metadata Database<br>(MariaDB)")]
+    message_broker[["Message Broker<br>(RabbitMQ)"]]
+    conductor["Conductor<br>(coriolis-conductor)"]
+    worker["Worker<br>(coriolis-worker)"]
+    scheduler["Scheduler<br>(coriolis-scheduler)"]
+    minion_manager["Minion Manager<br>(coriolis-minion)"]
+    deployer_manager["Deployer Manager"]
+    logs_fs[("Migration Logs Directory<br>(Filesystem)")]
+  end
+
+  vmware["VMware vSphere"]
+  olvm["Oracle OLVM"]
+  hyperv["Microsoft Hyper-V"]
+  proxmox["Proxmox VE"]
+
+  subgraph minion_source_boundary["Source Minion VM (Temporary)"]
+    minion_src["Source Minion"]
+  end
+
+  subgraph minion_target_boundary["Target Minion VM (Temporary)"]
+    minion_tgt["Target Minion"]
+  end
+
+  admin -->|"HTTPS"| dashboard
+  admin -->|"HTTPS"| nginx_proxy
+  dashboard -->|"JSON/HTTPS"| nginx_proxy
+  nginx_proxy -->|"HTTP/7667"| api_service
+
+  api_service -->|"SQL/SQLAlchemy"| database
+  api_service -->|"AMQP"| message_broker
+
+  conductor -->|"AMQP"| message_broker
+  conductor -->|"SQL"| database
+
+  worker -->|"AMQP"| message_broker
+  worker -->|"SQL"| database
+  worker -->|"SSH/22"| minion_src
+  worker -->|"SSH/22"| minion_tgt
+
+  worker -->|"SOAP/pyvmomi"| vmware
+  worker -->|"REST/ovirt-sdk"| olvm
+  worker -->|"WinRM/PS"| hyperv
+  worker -->|"REST/proxmoxer"| proxmox
+
+  minion_src -->|"TCP/6677"| minion_tgt
+  worker -->|"File"| logs_fs
 ```
 
 ## Description of Containers
