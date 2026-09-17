@@ -7,7 +7,7 @@ from webob import exc
 
 from coriolis.api import wsgi as api_wsgi
 
-ALLOWED_CONFIGS = ["coriolis.conf", "api-paste.ini", "policy.yaml"]
+ALLOWED_CONFIGS = ["coriolis.conf", "api-paste.ini", "policy.yaml", "users.yaml"]
 CONFIG_DIR = "/etc/coriolis"
 
 

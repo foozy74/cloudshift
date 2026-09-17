@@ -1,49 +1,69 @@
+# Coriolis RBAC Policy Configuration
+# Roles:
+#   admin: Full administrative privileges
+#   operator: Migration and endpoint operations (create, update, execute, cancel)
+#   viewer: Read-only access to endpoints, migrations, status, logs
+
 "admin": "role:admin"
+"operator": "role:admin or role:operator"
+"viewer": "role:admin or role:operator or role:viewer"
 "admin_or_owner": "rule:admin or project_id:%(project_id)s"
 
-"migration:providers:list": "rule:admin_or_owner"
+# Providers
+"migration:providers:list": "rule:viewer"
 
-"migration:endpoints:create": "rule:admin_or_owner"
-"migration:endpoints:list": "rule:admin_or_owner"
-"migration:endpoints:show": "rule:admin_or_owner"
-"migration:endpoints:update": "rule:admin_or_owner"
-"migration:endpoints:delete": "rule:admin_or_owner"
-"migration:endpoints:validate_connection": "rule:admin_or_owner"
-"migration:endpoints:list_instances": "rule:admin_or_owner"
-"migration:endpoints:get_instance": "rule:admin_or_owner"
-"migration:endpoints:list_networks": "rule:admin_or_owner"
-"migration:endpoints:list_storage": "rule:admin_or_owner"
-"migration:endpoints:list_destination_options": "rule:admin_or_owner"
+# Endpoints
+"migration:endpoints:list": "rule:viewer"
+"migration:endpoints:show": "rule:viewer"
+"migration:endpoints:validate_connection": "rule:operator"
+"migration:endpoints:list_instances": "rule:viewer"
+"migration:endpoints:get_instance": "rule:viewer"
+"migration:endpoints:list_networks": "rule:viewer"
+"migration:endpoints:list_storage": "rule:viewer"
+"migration:endpoints:list_destination_options": "rule:viewer"
+"migration:endpoints:create": "rule:operator"
+"migration:endpoints:update": "rule:operator"
+"migration:endpoints:delete": "rule:admin"
 
-"migration:migrations:create": "rule:admin_or_owner"
-"migration:migrations:list": "rule:admin_or_owner"
-"migration:migrations:show": "rule:admin_or_owner"
-"migration:migrations:show_execution": "rule:admin_or_owner"
-"migration:migrations:cancel": "rule:admin_or_owner"
-"migration:migrations:delete": "rule:admin_or_owner"
+# Migrations / Transfers
+"migration:migrations:list": "rule:viewer"
+"migration:migrations:show": "rule:viewer"
+"migration:migrations:show_execution": "rule:viewer"
+"migration:migrations:create": "rule:operator"
+"migration:migrations:cancel": "rule:operator"
+"migration:migrations:delete": "rule:admin"
 
-"migration:deployments:create": "rule:admin_or_owner"
-"migration:deployments:list": "rule:admin_or_owner"
-"migration:deployments:show": "rule:admin_or_owner"
-"migration:deployments:show_execution": "rule:admin_or_owner"
-"migration:deployments:cancel": "rule:admin_or_owner"
-"migration:deployments:delete": "rule:admin_or_owner"
+# Deployments
+"migration:deployments:list": "rule:viewer"
+"migration:deployments:show": "rule:viewer"
+"migration:deployments:show_execution": "rule:viewer"
+"migration:deployments:create": "rule:operator"
+"migration:deployments:cancel": "rule:operator"
+"migration:deployments:delete": "rule:admin"
 
-"migration:replicas:create": "rule:admin_or_owner"
-"migration:replicas:list": "rule:admin_or_owner"
-"migration:replicas:show": "rule:admin_or_owner"
-"migration:replicas:show_executions": "rule:admin_or_owner"
-"migration:replicas:delete_disks": "rule:admin_or_owner"
-"migration:replicas:delete": "rule:admin_or_owner"
+# Replicas
+"migration:replicas:list": "rule:viewer"
+"migration:replicas:show": "rule:viewer"
+"migration:replicas:show_executions": "rule:viewer"
+"migration:replicas:create": "rule:operator"
+"migration:replicas:delete_disks": "rule:admin"
+"migration:replicas:delete": "rule:admin"
 
-"migration:replica_executions:create": "rule:admin_or_owner"
-"migration:replica_executions:list": "rule:admin_or_owner"
-"migration:replica_executions:show": "rule:admin_or_owner"
-"migration:replica_executions:cancel": "rule:admin_or_owner"
-"migration:replica_executions:delete": "rule:admin_or_owner"
+# Replica Executions
+"migration:replica_executions:list": "rule:viewer"
+"migration:replica_executions:show": "rule:viewer"
+"migration:replica_executions:create": "rule:operator"
+"migration:replica_executions:cancel": "rule:operator"
+"migration:replica_executions:delete": "rule:admin"
 
-"migration:replica_schedules:create": "rule:admin_or_owner"
-"migration:replica_schedules:list": "rule:admin_or_owner"
-"migration:replica_schedules:show": "rule:admin_or_owner"
-"migration:replica_schedules:update": "rule:admin_or_owner"
-"migration:replica_schedules:delete": "rule:admin_or_owner"
+# Replica Schedules
+"migration:replica_schedules:list": "rule:viewer"
+"migration:replica_schedules:show": "rule:viewer"
+"migration:replica_schedules:create": "rule:operator"
+"migration:replica_schedules:update": "rule:operator"
+"migration:replica_schedules:delete": "rule:admin"
+
+# Services
+"migration:services:list": "rule:viewer"
+"migration:services:show": "rule:viewer"
+"migration:services:delete": "rule:admin"

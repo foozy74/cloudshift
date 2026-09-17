@@ -161,9 +161,20 @@ const TRANSLATIONS = {
         "alert-config-load-success": "Konfiguration erfolgreich geladen!",
         "alert-config-save-success": "Konfiguration erfolgreich gespeichert!",
         "alert-error-config-load": "Fehler beim Laden der Konfiguration",
-        "alert-error-config-save": "Fehler beim Speichern der Konfiguration",
         "title-configs-editor": "Konfigurations-Editor",
-        "title-faq-section": "Häufig gestellte Fragen"
+        "title-faq-section": "Häufig gestellte Fragen",
+        "login-subtitle": "CloudShift Migrations-Dashboard",
+        "label-login-username": "Benutzername",
+        "label-login-password": "Passwort",
+        "btn-login": "Anmelden",
+        "btn-logout-title": "Abmelden",
+        "login-hint": "Lokal (admin/operator/viewer) oder LDAPS / Active Directory",
+        "login-error-empty": "Bitte Benutzername und Passwort eingeben.",
+        "login-error-failed": "Ungültige Anmeldedaten oder Server nicht erreichbar.",
+        "session-expired": "Sitzung abgelaufen. Bitte erneut anmelden.",
+        "role-viewer-notice": "Sie sind als Betrachter (Viewer) angemeldet. Änderungen und Migrationen sind deaktiviert.",
+        "role-operator-notice": "Sie sind als Operator angemeldet.",
+        "role-admin-notice": "Sie sind als Administrator angemeldet."
     },
     en: {
         "nav-dashboard": "Dashboard",
@@ -323,9 +334,20 @@ const TRANSLATIONS = {
         "alert-config-load-success": "Configuration loaded successfully!",
         "alert-config-save-success": "Configuration saved successfully!",
         "alert-error-config-load": "Error loading configuration",
-        "alert-error-config-save": "Error saving configuration",
         "title-configs-editor": "Configuration Editor",
-        "title-faq-section": "Frequently Asked Questions"
+        "title-faq-section": "Frequently Asked Questions",
+        "login-subtitle": "CloudShift Migration Dashboard",
+        "label-login-username": "Username",
+        "label-login-password": "Password",
+        "btn-login": "Sign In",
+        "btn-logout-title": "Log out",
+        "login-hint": "Local (admin/operator/viewer) or LDAPS / Active Directory",
+        "login-error-empty": "Please enter username and password.",
+        "login-error-failed": "Invalid credentials or server unreachable.",
+        "session-expired": "Session expired. Please sign in again.",
+        "role-viewer-notice": "You are logged in with Read-Only (Viewer) access. Modifications are disabled.",
+        "role-operator-notice": "You are logged in as Operator.",
+        "role-admin-notice": "You are logged in as Administrator."
     }
 };
 
@@ -340,19 +362,205 @@ document.addEventListener('DOMContentLoaded', () => {
     initApp();
 });
 
+function getAuthToken() {
+    return sessionStorage.getItem('coriolis_token');
+}
+
+function setAuthToken(token, user) {
+    if (token) {
+        sessionStorage.setItem('coriolis_token', token);
+        sessionStorage.setItem('coriolis_user', JSON.stringify(user || {}));
+    } else {
+        sessionStorage.removeItem('coriolis_token');
+        sessionStorage.removeItem('coriolis_user');
+    }
+}
+
+function getStoredUser() {
+    try {
+        const raw = sessionStorage.getItem('coriolis_user');
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function fetchWithAuth(url, options = {}) {
+    const token = getAuthToken();
+    const headers = options.headers ? new Headers(options.headers) : new Headers();
+
+    if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const response = await fetch(url, { ...options, headers });
+
+    // Handle 401 Unauthorized globally
+    if (response.status === 401 && !url.includes('/auth/login')) {
+        showLoginModal(getTranslation('session-expired'));
+    }
+
+    return response;
+}
+
+function showLoginModal(errorMessage = '') {
+    const overlay = document.getElementById('loginOverlay');
+    const errorEl = document.getElementById('loginError');
+    if (!overlay) return;
+    if (errorMessage) {
+        errorEl.textContent = errorMessage;
+        errorEl.classList.remove('hidden');
+    } else {
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
+    }
+    overlay.classList.add('active');
+    const pw = document.getElementById('loginPassword');
+    if (pw) pw.value = '';
+}
+
+function hideLoginModal() {
+    const overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.classList.remove('active');
+}
+
+async function performLogin(username, password) {
+    const errorEl = document.getElementById('loginError');
+    const spinner = document.getElementById('loginSpinner');
+    const submitBtn = document.getElementById('btnLoginSubmit');
+
+    if (errorEl) {
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
+    }
+    if (spinner) spinner.classList.remove('hidden');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+        const res = await fetch('/v1/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            const msg = (data.error && data.error.message) || data.explanation || getTranslation('login-error-failed');
+            throw new Error(msg);
+        }
+
+        setAuthToken(data.token, data.user);
+        hideLoginModal();
+        updateUserProfile(data.user);
+        applyRolePermissions(data.user.roles || []);
+        await refreshAllData();
+    } catch (err) {
+        if (errorEl) {
+            errorEl.textContent = err.message || getTranslation('login-error-failed');
+            errorEl.classList.remove('hidden');
+        }
+    } finally {
+        if (spinner) spinner.classList.add('hidden');
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
+function performLogout() {
+    setAuthToken(null, null);
+    showLoginModal();
+    updateUserProfile(null);
+    applyRolePermissions(['viewer']);
+}
+
+function updateUserProfile(user) {
+    if (!user) {
+        user = { username: 'Gast', roles: ['viewer'] };
+    }
+    const avatarEl = document.getElementById('userAvatar');
+    const nameEl = document.getElementById('userName');
+    const roleBadgeEl = document.getElementById('userRoleBadge');
+
+    if (nameEl) nameEl.textContent = user.name || user.username || 'User';
+    if (avatarEl) avatarEl.textContent = (user.username || 'U')[0].toUpperCase();
+
+    if (roleBadgeEl) {
+        const roles = user.roles || ['viewer'];
+        roleBadgeEl.className = 'user-role';
+        if (roles.includes('admin')) {
+            roleBadgeEl.textContent = 'admin';
+            roleBadgeEl.classList.add('badge-admin');
+        } else if (roles.includes('operator')) {
+            roleBadgeEl.textContent = 'operator';
+            roleBadgeEl.classList.add('badge-operator');
+        } else {
+            roleBadgeEl.textContent = 'viewer';
+            roleBadgeEl.classList.add('badge-viewer');
+        }
+    }
+}
+
+function applyRolePermissions(roles = []) {
+    const isAdmin = roles.includes('admin');
+    const isOperator = roles.includes('operator') || isAdmin;
+    const isViewerOnly = !isOperator;
+
+    const banner = document.getElementById('roleNoticeBanner');
+    if (banner) {
+        if (isViewerOnly) {
+            banner.textContent = `ℹ️ ${getTranslation('role-viewer-notice')}`;
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
+        }
+    }
+
+    const btnNewEndpoint = document.getElementById('btnNewEndpoint');
+    const btnNewTransfer = document.getElementById('btnNewTransfer');
+    const btnSaveConfig = document.getElementById('btnSaveConfig');
+
+    if (btnNewEndpoint) {
+        btnNewEndpoint.disabled = isViewerOnly;
+        btnNewEndpoint.title = isViewerOnly ? getTranslation('role-viewer-notice') : '';
+    }
+    if (btnNewTransfer) {
+        btnNewTransfer.disabled = isViewerOnly;
+        btnNewTransfer.title = isViewerOnly ? getTranslation('role-viewer-notice') : '';
+    }
+    if (btnSaveConfig) {
+        btnSaveConfig.disabled = !isAdmin;
+        btnSaveConfig.title = !isAdmin ? 'Nur für Administratoren' : '';
+    }
+}
+
 function initApp() {
     setupNavigation();
     setupModals();
     setupForms();
     setupLangSelector();
     setupConfigEditor();
-    refreshAllData();
+
+    // Check existing authentication token
+    const token = getAuthToken();
+    const storedUser = getStoredUser();
+
+    if (!token) {
+        showLoginModal();
+    } else {
+        hideLoginModal();
+        updateUserProfile(storedUser);
+        applyRolePermissions(storedUser ? storedUser.roles : []);
+        refreshAllData();
+    }
 
     // Set connection status label
     document.getElementById('apiHost').textContent = `${window.location.hostname}:7667`;
 
-    // Periodic refresh every 10 seconds
-    setInterval(refreshAllData, 10000);
+    // Periodic refresh every 10 seconds only when logged in
+    setInterval(() => {
+        if (getAuthToken()) {
+            refreshAllData();
+        }
+    }, 10000);
 }
 
 function getTranslation(key) {
@@ -605,6 +813,31 @@ function setupModals() {
 
 // Form Handlers & Field Toggles
 function setupForms() {
+    // Login Form Submit
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value;
+            if (!u || !p) {
+                const err = document.getElementById('loginError');
+                if (err) {
+                    err.textContent = getTranslation('login-error-empty');
+                    err.classList.remove('hidden');
+                }
+                return;
+            }
+            await performLogin(u, p);
+        });
+    }
+
+    // Logout Button
+    const btnLogout = document.getElementById('btnLogout');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', performLogout);
+    }
+
     const epType = document.getElementById('endpointType');
     const vmwareFields = document.getElementById('vmwareFields');
     const olvmFields = document.getElementById('olvmFields');
@@ -695,7 +928,7 @@ function setupForms() {
         }
 
         try {
-            const res = await fetch(url, {
+            const res = await fetchWithAuth(url, {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -804,7 +1037,7 @@ function setupForms() {
             };
         }
 
-        const res = await fetch(`${API_BASE}/transfers`, {
+        const res = await fetchWithAuth(`${API_BASE}/transfers`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -907,7 +1140,7 @@ async function fetchInstanceDetails(endpointId, instanceName) {
     const instanceId = btoa(unescape(encodeURIComponent(instanceName)))
         .replace(/\+/g, '-')
         .replace(/\//g, '_');
-    const res = await fetch(`${API_BASE}/endpoints/${endpointId}/instances/${instanceId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/endpoints/${endpointId}/instances/${instanceId}`, {
         headers: { 'X-Project-Id': 'admin' }
     });
     if (!res.ok) throw new Error(await res.text());
@@ -980,7 +1213,7 @@ async function refreshAllData() {
 async function fetchList(resource) {
     const resourceName = resource.split('?')[0];
     try {
-        const res = await fetch(`${API_BASE}/${resource}`, {
+        const res = await fetchWithAuth(`${API_BASE}/${resource}`, {
             headers: { 'X-Project-Id': 'admin' }
         });
         if (!res.ok) throw new Error();
@@ -1050,6 +1283,12 @@ function renderEndpointsGrid(endpoints) {
             detailsHtml = `<p><span>Proxmox API:</span> ${ep.connection_info.url}</p><p><span>${getTranslation('label-username')}:</span> ${ep.connection_info.username}</p>`;
         }
 
+        const storedUser = getStoredUser();
+        const roles = (storedUser && storedUser.roles) || ['viewer'];
+        const isAdmin = roles.includes('admin');
+        const isOperator = roles.includes('operator') || isAdmin;
+        const isViewerOnly = !isOperator;
+
         return `
             <div class="endpoint-card">
                 <div class="endpoint-header">
@@ -1063,8 +1302,8 @@ function renderEndpointsGrid(endpoints) {
                     ${detailsHtml}
                 </div>
                 <div class="endpoint-actions">
-                    <button class="btn btn-primary" onclick="editEndpoint('${ep.id}')" style="margin-right: 8px;">${getTranslation('btn-edit')}</button>
-                    <button class="btn btn-danger" onclick="deleteEndpoint('${ep.id}')">${getTranslation('btn-delete')}</button>
+                    <button class="btn btn-primary" onclick="editEndpoint('${ep.id}')" style="margin-right: 8px;" ${isViewerOnly ? 'disabled title="' + getTranslation('role-viewer-notice') + '"' : ''}>${getTranslation('btn-edit')}</button>
+                    <button class="btn btn-danger" onclick="deleteEndpoint('${ep.id}')" ${!isAdmin ? 'disabled title="Nur für Administratoren"' : ''}>${getTranslation('btn-delete')}</button>
                 </div>
             </div>
         `;
@@ -1101,15 +1340,21 @@ function renderTransfersTable(transfers, endpoints) {
                 </button>
             `;
 
+            const storedUser = getStoredUser();
+            const roles = (storedUser && storedUser.roles) || ['viewer'];
+            const isAdmin = roles.includes('admin');
+            const isOperator = roles.includes('operator') || isAdmin;
+            const isViewerOnly = !isOperator;
+
             let actionsHtml = '';
             if (status === 'RUNNING' || status === 'CANCELLING') {
                 actionsHtml = `<span class="text-muted">${getTranslation('msg-action-running')}</span>`;
             } else {
                 actionsHtml = `
                     <div class="action-buttons">
-                        <button class="btn btn-success" onclick="executeTransfer('${tf.id}')">${getTranslation('btn-replication')}</button>
-                        <button class="btn btn-primary" onclick="deployTransfer('${tf.id}')">${getTranslation('btn-cutover')}</button>
-                        <button class="btn btn-danger" onclick="deleteTransfer('${tf.id}')">${getTranslation('btn-delete')}</button>
+                        <button class="btn btn-success" onclick="executeTransfer('${tf.id}')" ${isViewerOnly ? 'disabled title="' + getTranslation('role-viewer-notice') + '"' : ''}>${getTranslation('btn-replication')}</button>
+                        <button class="btn btn-primary" onclick="deployTransfer('${tf.id}')" ${isViewerOnly ? 'disabled title="' + getTranslation('role-viewer-notice') + '"' : ''}>${getTranslation('btn-cutover')}</button>
+                        <button class="btn btn-danger" onclick="deleteTransfer('${tf.id}')" ${!isAdmin ? 'disabled title="Nur für Administratoren"' : ''}>${getTranslation('btn-delete')}</button>
                     </div>
                 `;
             }
@@ -1210,9 +1455,11 @@ function renderServicesTable(services) {
             `<span class="badge status-completed">${getTranslation('status-up')}</span>` : 
             `<span class="badge status-failed">${getTranslation('status-down')}</span>`;
         
+        const storedUser = getStoredUser();
+        const isAdmin = storedUser && storedUser.roles && storedUser.roles.includes('admin');
         let actionBtn = '';
         if (!isUp) {
-            actionBtn = `<button class="btn btn-danger btn-sm" onclick="deleteService('${s.id}')">${getTranslation('btn-clean')}</button>`;
+            actionBtn = `<button class="btn btn-danger btn-sm" onclick="deleteService('${s.id}')" ${!isAdmin ? 'disabled title="Nur für Administratoren"' : ''}>${getTranslation('btn-clean')}</button>`;
         }
 
         return `
@@ -1231,7 +1478,7 @@ function renderServicesTable(services) {
 async function deleteEndpoint(id) {
     if (!confirm(getTranslation('confirm-delete-ep'))) return;
     try {
-        const res = await fetch(`${API_BASE}/endpoints/${id}`, {
+        const res = await fetchWithAuth(`${API_BASE}/endpoints/${id}`, {
             method: 'DELETE',
             headers: { 'X-Project-Id': 'admin' }
         });
@@ -1245,7 +1492,7 @@ async function deleteEndpoint(id) {
 async function deleteTransfer(id) {
     if (!confirm(getTranslation('confirm-delete-tf'))) return;
     try {
-        const res = await fetch(`${API_BASE}/transfers/${id}`, {
+        const res = await fetchWithAuth(`${API_BASE}/transfers/${id}`, {
             method: 'DELETE',
             headers: { 'X-Project-Id': 'admin' }
         });
@@ -1259,7 +1506,7 @@ async function deleteTransfer(id) {
 async function deleteService(id) {
     if (!confirm(getTranslation('confirm-delete-service'))) return;
     try {
-        const res = await fetch(`${API_BASE}/services/${id}`, {
+        const res = await fetchWithAuth(`${API_BASE}/services/${id}`, {
             method: 'DELETE',
             headers: { 'X-Project-Id': 'admin' }
         });
@@ -1273,7 +1520,7 @@ async function deleteService(id) {
 // Action Trigger
 async function executeTransfer(id) {
     try {
-        const res = await fetch(`${API_BASE}/transfers/${id}/executions`, {
+        const res = await fetchWithAuth(`${API_BASE}/transfers/${id}/executions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1297,7 +1544,7 @@ async function executeTransfer(id) {
 async function deployTransfer(id) {
     if (!confirm(getTranslation('confirm-deploy'))) return;
     try {
-        const res = await fetch(`${API_BASE}/deployments`, {
+        const res = await fetchWithAuth(`${API_BASE}/deployments`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1500,15 +1747,21 @@ function setupConfigEditor() {
             return;
         }
 
+        const storedUser = getStoredUser();
+        const isAdmin = storedUser && storedUser.roles && storedUser.roles.includes('admin');
+
         try {
-            const res = await fetch(`${API_BASE}/configs/${fileId}`, {
+            const res = await fetchWithAuth(`${API_BASE}/configs/${fileId}`, {
                 headers: { 'X-Project-Id': 'admin' }
             });
             if (!res.ok) throw new Error(await res.text());
             const data = await res.json();
             textarea.value = data.config.content || '';
-            textarea.readOnly = false;
-            btnSave.disabled = false;
+            textarea.readOnly = !isAdmin;
+            btnSave.disabled = !isAdmin;
+            if (!isAdmin) {
+                btnSave.title = 'Nur für Administratoren';
+            }
         } catch (err) {
             console.error(err);
             alert(`${getTranslation('alert-error-config-load')}: ${err.message}`);
@@ -1527,7 +1780,7 @@ function setupConfigEditor() {
         btnSave.textContent = getTranslation('msg-action-running');
 
         try {
-            const res = await fetch(`${API_BASE}/configs/${fileId}`, {
+            const res = await fetchWithAuth(`${API_BASE}/configs/${fileId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1546,7 +1799,9 @@ function setupConfigEditor() {
             console.error(err);
             alert(`${getTranslation('alert-error-config-save')}: ${err.message}`);
         } finally {
-            btnSave.disabled = false;
+            const storedUser = getStoredUser();
+            const isAdmin = storedUser && storedUser.roles && storedUser.roles.includes('admin');
+            btnSave.disabled = !isAdmin;
             btnSave.textContent = getTranslation('btn-save-config');
         }
     });
@@ -1554,7 +1809,7 @@ function setupConfigEditor() {
 
 async function fetchConfigsList(selectEl) {
     try {
-        const res = await fetch(`${API_BASE}/configs`, {
+        const res = await fetchWithAuth(`${API_BASE}/configs`, {
             headers: { 'X-Project-Id': 'admin' }
         });
         if (!res.ok) throw new Error(await res.text());

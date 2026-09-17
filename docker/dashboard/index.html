@@ -58,12 +58,18 @@
                         <button class="btn-lang active" id="btnLangDe" data-lang="de">DE</button>
                         <button class="btn-lang" id="btnLangEn" data-lang="en">EN</button>
                     </div>
-                    <div class="user-profile">
-                        <div class="avatar">A</div>
-                        <span class="username">Administrator</span>
+                    <div class="user-profile" id="userProfile">
+                        <div class="avatar" id="userAvatar">A</div>
+                        <div class="user-details">
+                            <span class="username" id="userName">Administrator</span>
+                            <span class="user-role badge-admin" id="userRoleBadge">admin</span>
+                        </div>
+                        <button class="btn-logout" id="btnLogout" title="Abmelden" data-i18n-title="btn-logout-title">🚪</button>
                     </div>
                 </div>
             </header>
+
+            <div id="roleNoticeBanner" class="role-banner hidden"></div>
 
             <!-- Dashboard Tab -->
             <section id="dashboardTab" class="tab-content active">
@@ -469,6 +475,35 @@
                     <button type="submit" class="btn btn-primary" data-i18n="btn-create">Erstellen</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Login Overlay -->
+    <div class="login-overlay active" id="loginOverlay">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="brand-logo login-logo">C</div>
+                <h2>Coriolis</h2>
+                <p data-i18n="login-subtitle">CloudShift Migration Dashboard</p>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginUsername" data-i18n="label-login-username">Benutzername</label>
+                    <input type="text" id="loginUsername" required placeholder="z.B. admin oder AD-Konto" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword" data-i18n="label-login-password">Passwort</label>
+                    <input type="password" id="loginPassword" required placeholder="Passwort eingeben" autocomplete="current-password">
+                </div>
+                <div class="login-error hidden" id="loginError"></div>
+                <button type="submit" class="btn btn-primary btn-login" id="btnLoginSubmit">
+                    <span id="loginBtnText" data-i18n="btn-login">Anmelden</span>
+                    <span id="loginSpinner" class="spinner-small hidden" style="margin-left: 0.5rem; display: inline-block;"></span>
+                </button>
+            </form>
+            <div class="login-footer">
+                <span class="login-hint" data-i18n="login-hint">Lokal (admin/operator/viewer) oder LDAPS / Active Directory</span>
+            </div>
         </div>
     </div>
 

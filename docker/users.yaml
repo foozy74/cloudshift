@@ -1,0 +1,24 @@
+# Coriolis Local Users Configuration
+# Supported password hash format: $pbkdf2-sha256$<iterations>$<salt>$<hash>
+
+users:
+  admin:
+    display_name: "Local Administrator"
+    password_hash: "$pbkdf2-sha256$100000$yz+WraSMDzkSjFoj3ko1rA==$r9YKdKEF/uq3NX+hZzmnLjreHbjfavBixlnqrdGwRgo="
+    roles:
+      - admin
+    enabled: true
+
+  operator:
+    display_name: "Migration Operator"
+    password_hash: "$pbkdf2-sha256$100000$t7jl/S9Bgec3whmPVKw/YA==$Z0FuUM9AxBpTFXFJIE+7k0sTCb/c/JK/PGHH/ZyfRQQ="
+    roles:
+      - operator
+    enabled: true
+
+  viewer:
+    display_name: "Read-Only Auditor"
+    password_hash: "$pbkdf2-sha256$100000$Dn8x7O+J4nZUO49ektKWzw==$eUWfMJopWIwGBGUgIElXqdvXxrjsejDrj3g1dI4vOT8="
+    roles:
+      - viewer
+    enabled: true

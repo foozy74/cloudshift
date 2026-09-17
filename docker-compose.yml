@@ -3,14 +3,14 @@ version: '3.8'
 services:
   database:
     image: mariadb:10-jammy
-    container_name: cloudshift-db
+    container_name: coriolis-db
     security_opt:
       - label:disable
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+      MYSQL_ROOT_PASSWORD: root_password
       MYSQL_DATABASE: coriolis
       MYSQL_USER: coriolis
-      MYSQL_PASSWORD: ${DB_PASSWORD:-coriolis_password}
+      MYSQL_PASSWORD: coriolis_password
     ports:
       - "13306:3306"
     volumes:
@@ -23,15 +23,15 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: cloudshift-rabbitmq
+    container_name: coriolis-rabbitmq
     security_opt:
       - label:disable
     ports:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
@@ -42,13 +42,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-db-sync
+    container_name: coriolis-db-sync
     security_opt:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
-    command: ["cloudshift-dbsync", "--config-file", "/etc/coriolis/coriolis.conf"]
+    command: ["coriolis-dbsync", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -57,8 +56,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-api
+    container_name: coriolis-api
     security_opt:
       - label:disable
     ports:
@@ -66,7 +64,9 @@ services:
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
       - ./etc/coriolis/api-paste.ini:/etc/coriolis/api-paste.ini
-    command: ["cloudshift-api", "--config-file", "/etc/coriolis/coriolis.conf"]
+      - ./docker/users.yaml:/etc/coriolis/users.yaml
+      - ./etc/coriolis/policy.yaml:/etc/coriolis/policy.yaml
+    command: ["coriolis-api", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -79,13 +79,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-conductor
+    container_name: coriolis-conductor
     security_opt:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
-    command: ["cloudshift-conductor", "--config-file", "/etc/coriolis/coriolis.conf"]
+    command: ["coriolis-conductor", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -98,15 +97,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-worker
-    hostname: cloudshift-worker
+    container_name: coriolis-worker
+    hostname: coriolis-worker
     security_opt:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
       - ~/.ssh:/root/.ssh:ro
-    command: ["cloudshift-worker", "--config-file", "/etc/coriolis/coriolis.conf"]
+    command: ["coriolis-worker", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -119,13 +117,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-scheduler
+    container_name: coriolis-scheduler
     security_opt:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
-    command: ["cloudshift-scheduler", "--config-file", "/etc/coriolis/coriolis.conf"]
+    command: ["coriolis-scheduler", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -138,13 +135,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-minion-manager
+    container_name: coriolis-minion-manager
     security_opt:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
-    command: ["cloudshift-minion-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
+    command: ["coriolis-minion-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -157,13 +153,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-deployer-manager
+    container_name: coriolis-deployer-manager
     security_opt:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
-    command: ["cloudshift-deployer-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
+    command: ["coriolis-deployer-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -176,13 +171,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift:latest
-    container_name: cloudshift-transfer-cron
+    container_name: coriolis-transfer-cron
     security_opt:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
-    command: ["cloudshift-transfer-cron", "--config-file", "/etc/coriolis/coriolis.conf"]
+    command: ["coriolis-transfer-cron", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
         condition: service_healthy
@@ -195,8 +189,7 @@ services:
     build:
       context: ./docker/dashboard
       dockerfile: Dockerfile
-    image: ghcr.io/thesolution/cloudshift-dashboard:latest
-    container_name: cloudshift-dashboard
+    container_name: coriolis-dashboard
     security_opt:
       - label:disable
     ports:

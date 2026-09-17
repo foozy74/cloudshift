@@ -53,3 +53,4 @@ cotyledon
 pyvmomi
 ovirt-engine-sdk-python
 proxmoxer
+ldap3>=2.9.1

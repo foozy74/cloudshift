@@ -4,6 +4,7 @@
 from oslo_log import log as logging
 
 from coriolis import api
+from coriolis.api.v1 import auth
 from coriolis.api.v1 import configs
 from coriolis.api.v1 import deployment_actions
 from coriolis.api.v1 import deployments
@@ -212,3 +213,29 @@ class APIRouter(api.APIRouter):
         self.resources['configs'] = configs.create_resource()
         mapper.resource('config', 'configs',
                         controller=self.resources['configs'])
+
+        self.resources['auth'] = auth.create_resource()
+        mapper.connect('auth_login', '/auth/login',
+                       controller=self.resources['auth'],
+                       action='login',
+                       conditions={'method': ['POST']})
+        mapper.connect('auth_login_proj', '/{project_id}/auth/login',
+                       controller=self.resources['auth'],
+                       action='login',
+                       conditions={'method': ['POST']})
+        mapper.connect('auth_me', '/auth/me',
+                       controller=self.resources['auth'],
+                       action='me',
+                       conditions={'method': ['GET']})
+        mapper.connect('auth_me_proj', '/{project_id}/auth/me',
+                       controller=self.resources['auth'],
+                       action='me',
+                       conditions={'method': ['GET']})
+        mapper.connect('auth_status', '/auth/status',
+                       controller=self.resources['auth'],
+                       action='status',
+                       conditions={'method': ['GET']})
+        mapper.connect('auth_status_proj', '/{project_id}/auth/status',
+                       controller=self.resources['auth'],
+                       action='status',
+                       conditions={'method': ['GET']})

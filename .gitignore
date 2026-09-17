@@ -30,3 +30,8 @@ coriolis/resources/bin/write_data
 .vscode/
 .pylintrc
 .env
+*.tar.gz
+offline-bundle/
+.gemini/
+graphify-out/
+GEMINI.md
