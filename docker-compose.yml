@@ -39,6 +39,7 @@ services:
       retries: 5
 
   db-sync:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -53,6 +54,7 @@ services:
         condition: service_healthy
 
   api:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -76,6 +78,7 @@ services:
         condition: service_completed_successfully
 
   conductor:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -94,6 +97,7 @@ services:
         condition: service_completed_successfully
 
   worker:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -114,6 +118,7 @@ services:
         condition: service_completed_successfully
 
   scheduler:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -132,6 +137,7 @@ services:
         condition: service_completed_successfully
 
   minion-manager:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -150,6 +156,7 @@ services:
         condition: service_completed_successfully
 
   deployer-manager:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -168,6 +175,7 @@ services:
         condition: service_completed_successfully
 
   transfer-cron:
+    image: ghcr.io/thesolution/cloudshift:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -186,6 +194,7 @@ services:
         condition: service_completed_successfully
 
   dashboard:
+    image: ghcr.io/thesolution/cloudshift-dashboard:latest
     build:
       context: ./docker/dashboard
       dockerfile: Dockerfile
