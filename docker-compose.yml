@@ -47,6 +47,7 @@ services:
     security_opt:
       - label:disable
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
     command: ["coriolis-dbsync", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
@@ -64,6 +65,7 @@ services:
     ports:
       - "7667:7667"
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
       - ./etc/coriolis/api-paste.ini:/etc/coriolis/api-paste.ini
       - ./docker/users.yaml:/etc/coriolis/users.yaml
@@ -86,6 +88,7 @@ services:
     security_opt:
       - label:disable
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
     command: ["coriolis-conductor", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
@@ -106,6 +109,7 @@ services:
     security_opt:
       - label:disable
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
       - ~/.ssh:/root/.ssh:ro
     command: ["coriolis-worker", "--config-file", "/etc/coriolis/coriolis.conf"]
@@ -126,6 +130,7 @@ services:
     security_opt:
       - label:disable
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
     command: ["coriolis-scheduler", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
@@ -145,6 +150,7 @@ services:
     security_opt:
       - label:disable
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
     command: ["coriolis-minion-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
@@ -164,6 +170,7 @@ services:
     security_opt:
       - label:disable
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
     command: ["coriolis-deployer-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
@@ -183,6 +190,7 @@ services:
     security_opt:
       - label:disable
     volumes:
+      - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
     command: ["coriolis-transfer-cron", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
@@ -204,7 +212,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./docker/dashboard/app.js:/usr/share/nginx/html/app.js
+      - ./docker/dashboard:/usr/share/nginx/html:ro
     depends_on:
       - api
     profiles:
