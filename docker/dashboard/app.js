@@ -1811,6 +1811,8 @@ function setupConfigEditor() {
             btnSave.textContent = getTranslation('btn-save-config');
         }
     });
+}
+
 async function fetchConfigsList(selectEl) {
     if (!selectEl) {
         selectEl = document.getElementById('configSelect');
