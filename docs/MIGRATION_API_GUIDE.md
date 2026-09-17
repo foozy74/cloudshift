@@ -339,7 +339,34 @@ curl -s "http://localhost:7667/v1/transfers/cb44cbdc-1d3a-4e06-a668-8d2125460e66
 
 ---
 
-## 4. Bandbreiten- & Dauer-Kalkulation aus den Logs
+## 4. Was Coriolis im OS-Morphing genau macht (Die 5 Kernaufgaben)
+
+Während der Cutover-Phase führt der temporäre OS-Morphing-Minion per `chroot` auf den gemounteten Ziel-Festplatten vollautomatisch folgende 5 Anpassungen durch:
+
+1. **KVM / QEMU Guest Agent (`qemu-guest-agent`) installieren & aktivieren:**
+   - Installiert das Paket `qemu-guest-agent` und aktiviert den Dienst via `systemctl enable --now qemu-guest-agent`.
+   - **Bedeutung für OLVM:** Erst dadurch kann OLVM im Web-Portal die IP-Adresse, Arbeitsspeicherauslastung und Systeminfos der VM anzeigen und Shutdown-/Reboot-Befehle sauber koordinieren.
+
+2. **VMware Tools sauber entfernen:**
+   - Deinstalliert `open-vm-tools` sowie proprietäre VMware-Tools-Reste und Agenten, um Treiberkonflikte und Log-Warnungen unter KVM zu verhindern.
+
+3. **VirtIO-Storage- & Netzwerktreiber in `initramfs` (Dracut) einbinden:**
+   - Stellt sicher, dass die KVM-Treiber `virtio_scsi`, `virtio_blk`, `virtio_pci` und `virtio_net` in der Boot-Ramdisk (`initramfs`) vorhanden sind.
+   - Verhindert Kernel-Panics beim Booten auf OLVM.
+
+4. **Netzwerk-Konfiguration migrieren:**
+   - Passt Netzwerkkarten und Konfigurationen (NetworkManager / `ifcfg`) an: Die alten VMware `vmxnet3`-Schnittstellen werden auf KVM VirtIO-Schnittstellen umgeschrieben (inkl. DHCP oder statischer IP-Beibehaltung).
+
+5. **Bootloader aktualisieren (GRUB2 / UEFI):**
+   - Führt `grub2-mkconfig` aus und registriert die neuen Boot-Geräte, damit der Kernel direkt von den VirtIO-Disks startet.
+
+> [!IMPORTANT]
+> **CPU-Anforderung im OLVM-Cluster (`x86-64-v3`):**  
+> Weil Coriolis Befehle per `chroot` direkt mit den Binaries des Ziel-Betriebssystems (z. B. Oracle Linux 9 / RHEL 9) ausführt, muss das OLVM-Cluster (z. B. `sb1`) bzw. die Minion-VM ein CPU-Modell besitzen, das den Befehlssatz der Ziel-VM unterstützt (mindestens `x86-64-v3` / AVX2, z. B. Intel Skylake, CascadeLake, IceLake oder AMD EPYC). Andernfalls bricht `glibc` mit `CPU does not support x86-64-v3` ab.
+
+---
+
+## 5. Bandbreiten- & Dauer-Kalkulation aus den Logs
 
 In den Logs des Workers (`podman logs coriolis-worker`) werden Datenmengen und Zeiten festgehalten:
 
@@ -357,7 +384,7 @@ In den Logs des Workers (`podman logs coriolis-worker`) werden Datenmengen und Z
 
 ---
 
-## 5. Rollback-Strategie
+## 6. Rollback-Strategie
 
 Die Quell-VM auf VMware wird **nicht gelöscht**, sondern verbleibt im Zustand **`Powered Off`**.
 
