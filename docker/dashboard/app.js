@@ -454,6 +454,7 @@ async function performLogin(username, password) {
         updateUserProfile(data.user);
         applyRolePermissions(data.user.roles || []);
         await refreshAllData();
+        fetchConfigsList();
     } catch (err) {
         if (errorEl) {
             errorEl.textContent = err.message || getTranslation('login-error-failed');
@@ -550,6 +551,7 @@ function initApp() {
         updateUserProfile(storedUser);
         applyRolePermissions(storedUser ? storedUser.roles : []);
         refreshAllData();
+        fetchConfigsList();
     }
 
     // Set connection status label
@@ -671,6 +673,10 @@ function setupNavigation() {
             
             updateHeaderTitle(tabId);
             window.location.hash = tabId;
+
+            if (tabId === 'configs') {
+                fetchConfigsList();
+            }
         });
     });
 
@@ -1805,26 +1811,45 @@ function setupConfigEditor() {
             btnSave.textContent = getTranslation('btn-save-config');
         }
     });
-}
-
 async function fetchConfigsList(selectEl) {
+    if (!selectEl) {
+        selectEl = document.getElementById('configSelect');
+    }
+    if (!selectEl) return;
+
+    const defaultConfigs = [
+        { id: 'coriolis.conf', name: 'coriolis.conf' },
+        { id: 'api-paste.ini', name: 'api-paste.ini' },
+        { id: 'policy.yaml', name: 'policy.yaml' },
+        { id: 'users.yaml', name: 'users.yaml' }
+    ];
+
+    const currentVal = selectEl.value;
+    const pleaseSelectText = getTranslation('select-please');
+
+    let configsToRender = defaultConfigs;
+
     try {
         const res = await fetchWithAuth(`${API_BASE}/configs`, {
             headers: { 'X-Project-Id': 'admin' }
         });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        const configs = data.configs || [];
-
-        const pleaseSelectText = getTranslation('select-please');
-        selectEl.innerHTML = `<option value="">${pleaseSelectText}</option>`;
-        configs.forEach(cfg => {
-            if (cfg.exists) {
-                selectEl.innerHTML += `<option value="${cfg.id}">${cfg.name}</option>`;
+        if (res.ok) {
+            const data = await res.json();
+            if (data.configs && data.configs.length > 0) {
+                configsToRender = data.configs;
             }
-        });
+        }
     } catch (err) {
-        console.error("Error loading config files list:", err);
+        console.warn("Using default configs list:", err);
+    }
+
+    let html = `<option value="">${pleaseSelectText}</option>`;
+    configsToRender.forEach(cfg => {
+        html += `<option value="${cfg.id}">${cfg.name}</option>`;
+    });
+    selectEl.innerHTML = html;
+    if (currentVal) {
+        selectEl.value = currentVal;
     }
 }
 

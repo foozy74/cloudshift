@@ -212,7 +212,8 @@ class APIRouter(api.APIRouter):
 
         self.resources['configs'] = configs.create_resource()
         mapper.resource('config', 'configs',
-                        controller=self.resources['configs'])
+                        controller=self.resources['configs'],
+                        requirements={'id': r'[\w\.-]+'})
 
         self.resources['auth'] = auth.create_resource()
         mapper.connect('auth_login', '/auth/login',
