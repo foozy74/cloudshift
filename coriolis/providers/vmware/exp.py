@@ -7,6 +7,7 @@ from oslo_config import cfg
 from oslo_log import log as logging
 
 from coriolis import exception
+from coriolis import utils
 from coriolis.providers import backup_writers
 from coriolis.providers import base
 from coriolis.providers import replicator as replicator_mod
@@ -29,6 +30,13 @@ vmware_opts = [
                default=None,
                help='IP address of the VMware worker VM (default to local '
                     'host if None)'),
+    cfg.StrOpt('worker_vm_name',
+               default=None,
+               help='Name of the VMware worker VM in vCenter (e.g. sb-v2v)'),
+    cfg.BoolOpt('auto_attach_disks',
+                default=True,
+                help='Automatically attach/hot-add source VM disks to worker '
+                     'VM during replication'),
     cfg.StrOpt('worker_ssh_password',
                default=None,
                secret=True,
@@ -90,6 +98,261 @@ class VMwareVSphereExportProvider(
         container.Destroy()
         raise exception.NotFound(
             f"VM '{name}' not found in vCenter inventory")
+
+    def _wait_for_task(self, task, timeout=600):
+        """Waits for a VMware Task to finish."""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            state = getattr(getattr(task, "info", None), "state", None)
+            if state in ["success", "error"]:
+                if state == "error":
+                    msg = getattr(
+                        getattr(task.info, "error", None),
+                        "localizedMessage", "Unknown error")
+                    raise exception.CoriolisException(
+                        f"VMware Task failed: {msg}")
+                return getattr(task.info, "result", None)
+            time.sleep(2)
+        raise exception.CoriolisException(
+            f"VMware Task timed out after {timeout} seconds.")
+
+    def _find_worker_vm(self, si, worker_vm_name=None, worker_ip=None):
+        """Finds the worker VM in vCenter by name or IP."""
+        from pyVmomi import vim
+
+        if worker_vm_name:
+            try:
+                return self._find_vm_by_name(si, worker_vm_name)
+            except exception.NotFound:
+                LOG.warning(
+                    "Worker VM '%s' not found by name, falling back to IP search",
+                    worker_vm_name)
+
+        if not worker_ip:
+            return None
+
+        content = si.RetrieveContent()
+        container = content.viewManager.CreateContainerView(
+            content.rootFolder, [vim.VirtualMachine], True)
+        try:
+            for vm in container.view:
+                if vm.name == worker_ip or (
+                        worker_vm_name and vm.name == worker_vm_name):
+                    return vm
+                guest = getattr(vm, "guest", None)
+                if guest:
+                    if getattr(guest, "ipAddress", None) == worker_ip:
+                        return vm
+                    for net in getattr(guest, "net", []) or []:
+                        for ip_entry in getattr(net, "ipAddress", []) or []:
+                            if ip_entry == worker_ip:
+                                return vm
+        finally:
+            container.Destroy()
+
+        return None
+
+    def _create_source_snapshot(self, source_vm, snapshot_name):
+        """Creates a temporary snapshot on the source VM if powered on."""
+        from pyVmomi import vim
+
+        power_state = getattr(
+            getattr(source_vm, "runtime", None), "powerState", None)
+        if power_state != vim.VirtualMachinePowerState.poweredOn:
+            return None
+
+        LOG.info("Creating temporary snapshot '%s' on source VM '%s'",
+                 snapshot_name, source_vm.name)
+        task = source_vm.CreateSnapshot_Task(
+            name=snapshot_name,
+            description="Temporary snapshot created by Coriolis for replication",
+            memory=False,
+            quiesce=False)
+        self._wait_for_task(task)
+        LOG.info("Snapshot '%s' created on VM '%s'", snapshot_name, source_vm.name)
+        return snapshot_name
+
+    def _remove_source_snapshot(self, source_vm, snapshot_name):
+        """Removes the temporary snapshot from the source VM."""
+        snapshot_obj = getattr(source_vm, "snapshot", None)
+        if not snapshot_name or not snapshot_obj:
+            return
+
+        def _find_snap(snapshots):
+            for snap in snapshots:
+                if getattr(snap, "name", None) == snapshot_name:
+                    return snap.snapshot
+                child = _find_snap(
+                    getattr(snap, "childSnapshotList", []) or [])
+                if child:
+                    return child
+            return None
+
+        snap_mor = _find_snap(
+            getattr(snapshot_obj, "rootSnapshotList", []) or [])
+        if snap_mor:
+            LOG.info("Removing temporary snapshot '%s' from source VM '%s'",
+                     snapshot_name, source_vm.name)
+            task = snap_mor.RemoveSnapshot_Task(removeChildren=False)
+            self._wait_for_task(task)
+            LOG.info("Temporary snapshot removed from VM '%s'", source_vm.name)
+
+    def _attach_disks_to_worker(self, si, worker_vm, disks):
+        """HotAdds existing VMDKs to worker_vm.
+
+        :param disks: list of dicts with 'path' (VMDK datastore path) and 'id'
+        :returns: list of dicts describing attached devices:
+                  [{'disk_id': id, 'vmdk_path': path, 'unit_number': u,
+                    'controller_key': c}]
+        """
+        from pyVmomi import vim
+
+        attached_info = []
+        spec = vim.vm.ConfigSpec()
+        dev_changes = []
+
+        controllers = []
+        used_slots = {}
+        for dev in worker_vm.config.hardware.device:
+            if isinstance(dev, vim.vm.device.VirtualSCSIController):
+                controllers.append(dev)
+                used_slots[dev.key] = {getattr(dev, "scsiCtlrUnitNumber", 7)}
+            elif isinstance(dev, vim.vm.device.VirtualDisk):
+                c_key = getattr(dev, "controllerKey", None)
+                if c_key in used_slots:
+                    used_slots[c_key].add(getattr(dev, "unitNumber", 0))
+
+        if not controllers:
+            raise exception.CoriolisException(
+                f"Worker VM '{worker_vm.name}' has no SCSI controllers.")
+
+        controller = controllers[0]
+        used = used_slots.get(controller.key, set())
+
+        next_unit = 0
+        for idx, disk in enumerate(disks):
+            vmdk_path = disk.get("path")
+            if not vmdk_path:
+                LOG.warning(
+                    "Disk %s has no datastore path, skipping attach",
+                    disk.get("id"))
+                continue
+
+            while next_unit in used or next_unit == getattr(
+                    controller, "scsiCtlrUnitNumber", 7):
+                next_unit += 1
+                if next_unit >= 16:
+                    raise exception.CoriolisException(
+                        f"Worker VM '{worker_vm.name}' controller has no free "
+                        "SCSI slots.")
+
+            used.add(next_unit)
+
+            disk_spec = vim.vm.device.VirtualDeviceSpec()
+            disk_spec.operation = vim.vm.device.VirtualDeviceSpec.Operation.add
+
+            vdisk = vim.vm.device.VirtualDisk()
+            vdisk.key = -100 - idx
+            vdisk.controllerKey = controller.key
+            vdisk.unitNumber = next_unit
+
+            backing = vim.vm.device.VirtualDisk.FlatVer2BackingInfo()
+            backing.fileName = vmdk_path
+            backing.diskMode = "independent_nonpersistent"
+            vdisk.backing = backing
+
+            disk_spec.device = vdisk
+            dev_changes.append(disk_spec)
+
+            attached_info.append({
+                "disk_id": disk.get("id"),
+                "vmdk_path": vmdk_path,
+                "unit_number": next_unit,
+                "controller_key": controller.key,
+            })
+            next_unit += 1
+
+        if not dev_changes:
+            return []
+
+        spec.deviceChange = dev_changes
+        LOG.info(
+            "Attaching %d disk(s) to worker VM '%s'",
+            len(dev_changes), worker_vm.name)
+        task = worker_vm.ReconfigVM_Task(spec=spec)
+        self._wait_for_task(task)
+        LOG.info(
+            "Successfully attached disk(s) to worker VM '%s'",
+            worker_vm.name)
+
+        return attached_info
+
+    def _detach_disks_from_worker(self, si, worker_vm, attached_disks):
+        """Detaches disks that were attached during replication."""
+        from pyVmomi import vim
+
+        if not attached_disks:
+            return
+
+        dev_changes = []
+        for dev in worker_vm.config.hardware.device:
+            if isinstance(dev, vim.vm.device.VirtualDisk):
+                backing = getattr(dev, "backing", None)
+                file_name = getattr(backing, "fileName", None)
+                c_key = getattr(dev, "controllerKey", None)
+                u_num = getattr(dev, "unitNumber", None)
+
+                matched = False
+                for att in attached_disks:
+                    if file_name and file_name == att.get("vmdk_path"):
+                        matched = True
+                        break
+                    if (c_key == att.get("controller_key") and
+                            u_num == att.get("unit_number")):
+                        matched = True
+                        break
+
+                if matched:
+                    disk_spec = vim.vm.device.VirtualDeviceSpec()
+                    disk_spec.operation = (
+                        vim.vm.device.VirtualDeviceSpec.Operation.remove)
+                    disk_spec.device = dev
+                    dev_changes.append(disk_spec)
+
+        if dev_changes:
+            spec = vim.vm.ConfigSpec()
+            spec.deviceChange = dev_changes
+            LOG.info(
+                "Detaching %d disk(s) from worker VM '%s'",
+                len(dev_changes), worker_vm.name)
+            task = worker_vm.ReconfigVM_Task(spec=spec)
+            self._wait_for_task(task)
+            LOG.info(
+                "Successfully detached disks from worker VM '%s'",
+                worker_vm.name)
+
+    def _trigger_scsi_rescan(self, ssh_info):
+        """Triggers a SCSI bus rescan on the worker VM via SSH."""
+        try:
+            ssh = utils.connect_ssh(
+                ssh_info["ip"], ssh_info.get("port", 22),
+                ssh_info.get("username", "root"),
+                pkey=ssh_info.get("pkey"),
+                password=ssh_info.get("password"),
+                banner_timeout=30)
+            rescan_cmd = (
+                "for host in /sys/class/scsi_host/*; do "
+                "echo '- - -' | sudo tee ${host}/scan > /dev/null; done"
+            )
+            utils.exec_ssh_cmd(ssh, rescan_cmd, get_pty=True)
+            ssh.close()
+            LOG.info(
+                "Triggered SCSI bus rescan on worker VM at %s",
+                ssh_info["ip"])
+        except Exception as e:
+            LOG.warning(
+                "Failed to trigger SCSI bus rescan on worker VM via SSH: %s",
+                e)
 
     def _vm_to_instance_dict(self, vm):
         """Konvertiert ein vim.VirtualMachine-Objekt in das instance_info-
@@ -566,27 +829,124 @@ class VMwareVSphereExportProvider(
         if not ssh_password and not ssh_pkey:
             ssh_password = CONF.vmware.worker_ssh_password
 
+        conn_info = {
+            "ip": worker_ip,
+            "port": 22,
+            "username": source_environment.get(
+                "worker_ssh_user", "root"),
+            "password": ssh_password,
+            "pkey": ssh_pkey,
+        }
+
+        migr_resources = {
+            "worker_ip": worker_ip,
+            "esxi_host": source_environment.get("esxi_host"),
+        }
+
+        auto_attach = source_environment.get(
+            "auto_attach_disks", CONF.vmware.auto_attach_disks)
+        worker_vm_name = source_environment.get(
+            "worker_vm_name", CONF.vmware.worker_vm_name)
+        source_vm_name = (
+            export_info.get("name") or export_info.get("instance_name"))
+        disks = export_info.get("devices", {}).get("disks", [])
+
+        has_vcenter_conn = bool(
+            connection_info and
+            connection_info.get("host") and
+            connection_info.get("username")
+        )
+
+        if auto_attach and source_vm_name and disks and has_vcenter_conn:
+            si = None
+            try:
+                si = self._get_vcenter_session(connection_info)
+                worker_vm = self._find_worker_vm(
+                    si, worker_vm_name, worker_ip)
+                if worker_vm:
+                    migr_resources["worker_vm_name"] = worker_vm.name
+                    migr_resources["source_vm_name"] = source_vm_name
+                    source_vm = self._find_vm_by_name(si, source_vm_name)
+
+                    snap_name = f"coriolis-replica-{source_vm_name}"
+                    created_snap = self._create_source_snapshot(
+                        source_vm, snap_name)
+                    if created_snap:
+                        migr_resources["snapshot_name"] = created_snap
+
+                    attached_disks = self._attach_disks_to_worker(
+                        si, worker_vm, disks)
+                    migr_resources["attached_disks"] = attached_disks
+
+                    if attached_disks:
+                        self._trigger_scsi_rescan(conn_info)
+                else:
+                    LOG.warning(
+                        "Worker VM could not be found in vCenter "
+                        "(name=%s, ip=%s). Skipping automated HotAdd.",
+                        worker_vm_name, worker_ip)
+            except Exception as e:
+                LOG.error("Failed to hot-add disks to worker VM: %s", e)
+                raise
+            finally:
+                if si:
+                    from pyVim.connect import Disconnect
+                    Disconnect(si)
+
         return {
-            "connection_info": {
-                "ip": worker_ip,
-                "port": 22,
-                "username": source_environment.get(
-                    "worker_ssh_user", "root"),
-                "password": ssh_password,
-                "pkey": ssh_pkey,
-            },
-            "migr_resources": {
-                "worker_ip": worker_ip,
-                "esxi_host": source_environment.get("esxi_host"),
-            },
+            "connection_info": conn_info,
+            "migr_resources": migr_resources,
         }
 
     def delete_replica_source_resources(self, ctxt, connection_info,
                                         source_environment,
                                         migr_resources_dict):
         """Source-Worker und temporäre Ressourcen aufräumen."""
-        LOG.info("Cleaning up source resources for worker: %s",
-                 migr_resources_dict.get("worker_ip"))
+        worker_ip = migr_resources_dict.get("worker_ip")
+        attached_disks = migr_resources_dict.get("attached_disks", [])
+        snapshot_name = migr_resources_dict.get("snapshot_name")
+        source_vm_name = migr_resources_dict.get("source_vm_name")
+        worker_vm_name = migr_resources_dict.get("worker_vm_name")
+
+        LOG.info("Cleaning up source resources for worker: %s", worker_ip)
+
+        has_vcenter_conn = bool(
+            connection_info and
+            connection_info.get("host") and
+            connection_info.get("username")
+        )
+
+        if (attached_disks or snapshot_name) and has_vcenter_conn:
+            si = None
+            try:
+                si = self._get_vcenter_session(connection_info)
+                if attached_disks:
+                    worker_vm = self._find_worker_vm(
+                        si, worker_vm_name, worker_ip)
+                    if worker_vm:
+                        self._detach_disks_from_worker(
+                            si, worker_vm, attached_disks)
+                    else:
+                        LOG.warning(
+                            "Worker VM '%s' not found during cleanup, "
+                            "disks may need manual detachment",
+                            worker_vm_name or worker_ip)
+
+                if snapshot_name and source_vm_name:
+                    try:
+                        source_vm = self._find_vm_by_name(si, source_vm_name)
+                        self._remove_source_snapshot(source_vm, snapshot_name)
+                    except Exception as snap_err:
+                        LOG.warning(
+                            "Failed to remove temporary snapshot '%s': %s",
+                            snapshot_name, snap_err)
+            except Exception as e:
+                LOG.warning(
+                    "Error during cleanup of attached disks on worker: %s", e)
+            finally:
+                if si:
+                    from pyVim.connect import Disconnect
+                    Disconnect(si)
 
     def replicate_disks(self, ctxt, connection_info, source_environment,
                         instance_name, source_resources,
