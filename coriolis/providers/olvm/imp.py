@@ -1170,9 +1170,12 @@ class OLVMoVirtImportProvider(
                 bootable=bootable,
                 clone=clone_disks)
             if clone_disks:
+                disk_identifier = vol.get("disk_id") or f"disk-{idx}"
+                clean_disk_name = f"{instance_name}_{disk_identifier}"
                 cloned = self._clone_disk(
                     conn, vol["volume_id"],
-                    target_environment.get("storage_domain_id"))
+                    target_environment.get("storage_domain_id"),
+                    clone_name=clean_disk_name)
                 vol["clone_id"] = cloned.id
                 self._attach_disk_to_vm(
                     conn, oVirt_vm.id, cloned.id, bootable=bootable)
@@ -1187,7 +1190,7 @@ class OLVMoVirtImportProvider(
             }
         }
 
-    def _clone_disk(self, conn, disk_id, storage_domain_id):
+    def _clone_disk(self, conn, disk_id, storage_domain_id, clone_name=None):
         """Klont eine oVirt-Disk."""
         import ovirtsdk4 as sdk
         import time
@@ -1196,7 +1199,8 @@ class OLVMoVirtImportProvider(
         disks_service = conn.system_service().disks_service()
         disk_service = disks_service.disk_service(disk_id)
 
-        clone_name = f"clone-{uuid.uuid4().hex[:8]}"
+        if not clone_name:
+            clone_name = f"clone-{uuid.uuid4().hex[:8]}"
 
         LOG.info("Cloning disk %s to storage domain %s with name %s...",
                  disk_id, storage_domain_id, clone_name)
