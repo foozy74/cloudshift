@@ -343,3 +343,166 @@ class VMwareVSphereExportProviderTestCase(test_base.CoriolisBaseTestCase):
                 expected_source_vols, mock_writer)
             mock_writer_factory.assert_called_once_with({}, volumes_info)
             self.assertEqual(res, volumes_info)
+
+    def test_wait_for_task_success(self):
+        mock_task = mock.MagicMock()
+        mock_task.info.state = "success"
+        mock_task.info.result = "done"
+        res = self.provider._wait_for_task(mock_task)
+        self.assertEqual(res, "done")
+
+    def test_wait_for_task_error(self):
+        mock_task = mock.MagicMock()
+        mock_task.info.state = "error"
+        mock_task.info.error.localizedMessage = "disk error"
+        self.assertRaises(
+            exception.CoriolisException,
+            self.provider._wait_for_task,
+            mock_task)
+
+    def test_find_worker_vm(self):
+        mock_si = mock.MagicMock()
+        mock_vm = mock.MagicMock()
+        mock_vm.name = "sb-v2v"
+        with mock.patch.object(
+                self.provider, "_find_vm_by_name", return_value=mock_vm):
+            found = self.provider._find_worker_vm(
+                mock_si, worker_vm_name="sb-v2v")
+            self.assertEqual(found, mock_vm)
+
+    def test_find_worker_vm_by_ip(self):
+        mock_si = mock.MagicMock()
+        mock_vm = mock.MagicMock()
+        mock_vm.name = "other-name"
+        mock_vm.guest.ipAddress = "172.23.219.61"
+        mock_container = mock.MagicMock()
+        mock_container.view = [mock_vm]
+        mock_si.RetrieveContent.return_value.viewManager.CreateContainerView.return_value = (
+            mock_container)
+
+        with mock.patch.object(
+                self.provider, "_find_vm_by_name",
+                side_effect=exception.NotFound("not found")):
+            found = self.provider._find_worker_vm(
+                mock_si, worker_vm_name="sb-v2v", worker_ip="172.23.219.61")
+            self.assertEqual(found, mock_vm)
+
+    @mock.patch("coriolis.providers.vmware.exp.VMwareVSphereExportProvider._trigger_scsi_rescan")
+    @mock.patch("pyVim.connect.Disconnect")
+    @mock.patch.object(exp.VMwareVSphereExportProvider, "_get_vcenter_session")
+    def test_deploy_replica_source_resources_with_hotadd(
+            self, mock_get_session, mock_disconnect, mock_rescan):
+        from pyVmomi import vim
+
+        mock_si = mock.MagicMock()
+        mock_get_session.return_value = mock_si
+
+        mock_source_vm = mock.MagicMock()
+        mock_source_vm.name = "source-vm"
+        mock_source_vm.runtime.powerState = "poweredOff"
+
+        mock_worker_vm = mock.MagicMock()
+        mock_worker_vm.name = "sb-v2v"
+
+        check_field_path = "pyVmomi.VmomiSupport.CheckField"
+        with mock.patch(check_field_path, lambda info, val: None):
+            mock_scsi = vim.vm.device.VirtualLsiLogicController()
+            mock_scsi.key = 1000
+            mock_scsi.scsiCtlrUnitNumber = 7
+            mock_disk = vim.vm.device.VirtualDisk()
+            mock_disk.key = 2000
+            mock_disk.controllerKey = 1000
+            mock_disk.unitNumber = 0
+            mock_worker_vm.config.hardware.device = [mock_scsi, mock_disk]
+
+        mock_task = mock.MagicMock()
+        mock_task.info.state = "success"
+        mock_worker_vm.ReconfigVM_Task.return_value = mock_task
+
+        with mock.patch.object(
+                self.provider, "_find_worker_vm", return_value=mock_worker_vm):
+            with mock.patch.object(
+                    self.provider, "_find_vm_by_name",
+                    return_value=mock_source_vm):
+                conn_info = {
+                    "host": "vcenter",
+                    "username": "admin",
+                    "password": "pwd"
+                }
+                export_info = {
+                    "name": "source-vm",
+                    "hostname": "172.23.219.61",
+                    "devices": {
+                        "disks": [
+                            {"id": "disk-1", "path": "[ds1] vm/disk1.vmdk"}
+                        ]
+                    }
+                }
+                source_env = {
+                    "worker_ip": "172.23.219.61",
+                    "worker_vm_name": "sb-v2v",
+                    "worker_ssh_user": "root",
+                    "worker_ssh_password": "secret",
+                    "auto_attach_disks": True,
+                }
+                res = self.provider.deploy_replica_source_resources(
+                    None, conn_info, export_info, source_env)
+
+                self.assertIn("attached_disks", res["migr_resources"])
+                self.assertEqual(len(res["migr_resources"]["attached_disks"]), 1)
+                self.assertEqual(
+                    res["migr_resources"]["attached_disks"][0]["disk_id"],
+                    "disk-1")
+                mock_worker_vm.ReconfigVM_Task.assert_called_once()
+                mock_rescan.assert_called_once()
+
+    @mock.patch("pyVim.connect.Disconnect")
+    @mock.patch.object(exp.VMwareVSphereExportProvider, "_get_vcenter_session")
+    def test_delete_replica_source_resources_with_detach(
+            self, mock_get_session, mock_disconnect):
+        from pyVmomi import vim
+
+        mock_si = mock.MagicMock()
+        mock_get_session.return_value = mock_si
+
+        mock_worker_vm = mock.MagicMock()
+        mock_worker_vm.name = "sb-v2v"
+
+        check_field_path = "pyVmomi.VmomiSupport.CheckField"
+        with mock.patch(check_field_path, lambda info, val: None):
+            mock_disk = vim.vm.device.VirtualDisk()
+            mock_disk.key = 2001
+            mock_disk.controllerKey = 1000
+            mock_disk.unitNumber = 1
+            mock_backing = vim.vm.device.VirtualDisk.FlatVer2BackingInfo()
+            mock_backing.fileName = "[ds1] vm/disk1.vmdk"
+            mock_disk.backing = mock_backing
+            mock_worker_vm.config.hardware.device = [mock_disk]
+
+        mock_task = mock.MagicMock()
+        mock_task.info.state = "success"
+        mock_worker_vm.ReconfigVM_Task.return_value = mock_task
+
+        with mock.patch.object(
+                self.provider, "_find_worker_vm", return_value=mock_worker_vm):
+            conn_info = {
+                "host": "vcenter",
+                "username": "admin",
+                "password": "pwd"
+            }
+            migr_resources = {
+                "worker_ip": "172.23.219.61",
+                "worker_vm_name": "sb-v2v",
+                "attached_disks": [
+                    {
+                        "disk_id": "disk-1",
+                        "vmdk_path": "[ds1] vm/disk1.vmdk",
+                        "controller_key": 1000,
+                        "unit_number": 1
+                    }
+                ]
+            }
+            self.provider.delete_replica_source_resources(
+                None, conn_info, {}, migr_resources)
+            mock_worker_vm.ReconfigVM_Task.assert_called_once()
+
