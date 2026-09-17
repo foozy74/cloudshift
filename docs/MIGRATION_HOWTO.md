@@ -13,9 +13,32 @@ Diese Anleitung führt Sie Schritt für Schritt durch den gesamten Migrationspro
 
 ### B. OLVM Minion-Template bereitstellen
 Coriolis benötigt auf der Ziel-OLVM-Plattform ein minimales OS-Template zur Erstellung der temporären Worker-VMs (Minions):
-1. Erstellen Sie eine minimale virtuelle Maschine in OLVM (z. B. mit Oracle Linux 8/9 oder CentOS).
+1. Erstellen Sie eine minimale virtuelle Maschine in OLVM (z. B. mit Oracle Linux 8/9 oder CentOS) mit installiertem `qemu-guest-agent`.
 2. Installieren Sie das Betriebssystem, konfigurieren Sie SSH und stellen Sie sicher, dass keine graphische Oberfläche aktiv ist.
-3. Fahren Sie die VM herunter und konvertieren Sie diese in OLVM in ein **Template** (z. B. Name: `coriolis-minion-template`).
+3. Fahren Sie die VM herunter und konvertieren Sie diese in OLVM in ein **Template** (z. B. Name: `sb-minion-template` oder `coriolis-minion-template`).
+4. **Template-Name konfigurieren:**
+   * **Global in `coriolis.conf`:**
+     ```ini
+     [olvm]
+     minion_template_name = sb-minion-template
+     ```
+   * **Oder pro Migration in der `destination_environment`:**
+     ```json
+     "destination_environment": {
+       "cluster_name": "Default",
+       "storage_domain": "data",
+       "minion_template_name": "sb-minion-template"
+     }
+     ```
+
+### C. VMware Worker-VM & Automatisches HotAdd
+Auf VMware-Seite dient eine bestehende Worker-VM (z. B. `sb-v2v`) als Daten-Proxy. Coriolis hängt die VMDK-Festplatten der Quell-VM per HotAdd vollautomatisch an diese Worker-VM an:
+```ini
+[vmware]
+worker_ip = 172.23.219.61
+worker_vm_name = sb-v2v
+auto_attach_disks = True
+```
 
 ---
 
@@ -88,10 +111,15 @@ curl -i -X POST -H "Content-Type: application/json" -H "X-Project-Id: admin" \
     "transfer": {
       "origin_endpoint_id": "c1a2b3c4-d5e6-f7g8-h9i0-j1k2l3m4n5o6",
       "destination_endpoint_id": "z9y8x7w6-v5u4-t3s2-r1q0-p9o8n7m6l5k4",
-      "source_environment": {},
+      "source_environment": {
+        "worker_vm_name": "sb-v2v",
+        "worker_ip": "172.23.219.61",
+        "auto_attach_disks": true
+      },
       "destination_environment": {
         "cluster_name": "Default",
-        "storage_domain": "data"
+        "storage_domain": "data",
+        "minion_template_name": "sb-minion-template"
       },
       "instances": [
         "webserver-prod-01"

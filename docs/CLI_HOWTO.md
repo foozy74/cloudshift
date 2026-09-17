@@ -159,13 +159,24 @@ To define a transfer, you must specify:
 * `--instance`: The name of the VM to migrate (can be specified multiple times for bulk migrations)
 * `--scenario`: Set to `replica` (retains disks and supports incremental synchronization)
 * `--network-map`: Mapping of source networks/port groups to destination networks
-* `--destination-environment`: Storage domains and target configurations
+* `--destination-environment`: Storage domains, target cluster and minion template
+* `--source-environment`: VMware worker VM and automated HotAdd options
 
 Create a destination environment JSON file (e.g., `dest_env.json`):
 ```json
 {
   "cluster_name": "Default",
-  "storage_domain": "data"
+  "storage_domain": "data",
+  "minion_template_name": "sb-minion-template"
+}
+```
+
+Create a source environment JSON file (e.g., `source_env.json`):
+```json
+{
+  "worker_vm_name": "sb-v2v",
+  "worker_ip": "172.23.219.61",
+  "auto_attach_disks": true
 }
 ```
 
@@ -183,6 +194,7 @@ coriolis -N transfer create \
   --destination-endpoint "<olvm-endpoint-uuid>" \
   --instance "web-server-prod" \
   --scenario "replica" \
+  --source-environment-file source_env.json \
   --destination-environment-file dest_env.json \
   --network-map-file net_map.json
 ```
