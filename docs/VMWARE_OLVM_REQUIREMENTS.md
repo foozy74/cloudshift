@@ -76,9 +76,10 @@
 |---|---|
 | Minion-Template | Oracle Linux 8/9 Cloud-Image mit cloud-init |
 | Minion-Spezifikation | Min. 2 vCPU, 4 GB RAM, 20 GB Boot-Disk |
+| CPU-Architektur | **Mindestens `x86-64-v3`** (AVX/AVX2 support, z. B. Intel Skylake/CascadeLake/IceLake oder AMD EPYC), damit moderne glibc-Binaries (Oracle Linux 9 / RHEL 9) beim OS-Morphing fehlerfrei ausgeführt werden. |
 | Minion-Software | `coriolis-writer` Binary, `coriolis-replicator` Binary |
 | Benötigte Pakete (Pre-installed) | **sshd** (für SSH-Verbindung von Coriolis)<br>**qemu-guest-agent** (Essentiell: wird von OLVM zur Erkennung der Minion-IP benötigt)<br>**cloud-init** (Netzwerkkonfiguration und SSH-Schlüssel)<br>**lvm2** (LVM-Verwaltung für Dateisysteme)<br>**psmisc** (Tools wie `fuser`/`killall` für Mounts)<br>**dm-mod** Kernel-Modul |
-| Minion-Netzwerk | Muss Coriolis-Server (Port 7667) und Korrespondenz-Minion (Port 6677) erreichen |
+| Minion-Netzwerk | Muss Coriolis-Server (Port 7667) und Korrespondenz-Minion (Port 6677/4433) erreichen |
 | Proxy-Zugriff / Repositories | Falls `lvm2` und `psmisc` nicht vorinstalliert sind, muss die Minion-VM während des OSMorphing-Setups Zugriff auf Paket-Repositories (ggf. über Proxy) haben, um diese dynamisch via `yum`/`dnf`/`zypper`/`apt-get` zu installieren. |
 
 ---
