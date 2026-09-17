@@ -33,6 +33,9 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
       RABBITMQ_ERLANG_COOKIE: coriolis_rabbitmq_cookie
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-setcookie coriolis_rabbitmq_cookie"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq:z
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
@@ -221,3 +224,4 @@ services:
 
 volumes:
   db_data:
+  rabbitmq_data:
