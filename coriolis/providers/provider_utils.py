@@ -135,8 +135,13 @@ def check_changed_storage_mappings(volumes_info, old_storage_mappings,
 
 
 class ProviderSession(requests.Session):
+    def __init__(self, *args, **kwargs):
+        super(ProviderSession, self).__init__(*args, **kwargs)
+        self.trust_env = False
+
     def merge_environment_settings(
             self, url, proxies, stream, verify, *args, **kwargs):
         verify = self.verify
         return super(ProviderSession, self).merge_environment_settings(
-            url, proxies, stream, verify, *args, **kwargs)
+            url, {}, stream, verify, *args, **kwargs)
+

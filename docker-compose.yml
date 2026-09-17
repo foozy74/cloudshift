@@ -94,6 +94,9 @@ services:
     volumes:
       - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    environment:
+      - NO_PROXY=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
+      - no_proxy=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
     command: ["coriolis-conductor", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
@@ -116,6 +119,9 @@ services:
       - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
       - ~/.ssh:/root/.ssh:ro
+    environment:
+      - NO_PROXY=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
+      - no_proxy=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
     command: ["coriolis-worker", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
@@ -156,6 +162,9 @@ services:
     volumes:
       - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    environment:
+      - NO_PROXY=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
+      - no_proxy=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
     command: ["coriolis-minion-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
@@ -176,6 +185,9 @@ services:
     volumes:
       - ./coriolis:/usr/local/lib/python3.11/site-packages/coriolis:ro
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf
+    environment:
+      - NO_PROXY=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
+      - no_proxy=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal
     command: ["coriolis-deployer-manager", "--config-file", "/etc/coriolis/coriolis.conf"]
     depends_on:
       database:
