@@ -12,6 +12,9 @@ COPY style.css /usr/share/nginx/html/
 COPY swagger.html /usr/share/nginx/html/
 COPY swagger.json /usr/share/nginx/html/
 
-EXPOSE 80
+# Copy SSL certificates
+COPY ssl/ /etc/nginx/ssl/
+
+EXPOSE 80 443
 
 CMD ["nginx", "-g", "daemon off;"]

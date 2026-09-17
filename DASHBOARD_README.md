@@ -23,19 +23,18 @@ Der Stack besteht aus folgenden Docker-Containern:
 
 ### Starten des Stacks
 
-1. **Kompletten Stack starten (inkl. Dashboard & Swagger)**:
-   ```bash
-   docker-compose --profile dashboard up -d
-   ```
-
-2. **Nur Core-Backend (ohne Dashboard)**:
+1. **Stack starten (inkl. Dashboard & Swagger)**:
    ```bash
    docker-compose up -d
+   # bzw. mit Podman:
+   podman-compose up -d
    ```
 
-3. **Dashboard separat starten**:
+2. **Dashboard separat starten / neu starten**:
    ```bash
-   docker-compose --profile dashboard up -d dashboard
+   docker-compose up -d dashboard
+   # bzw. mit Podman:
+   podman-compose up -d dashboard
    ```
 
 ---
@@ -44,8 +43,9 @@ Der Stack besteht aus folgenden Docker-Containern:
 
 Nach dem Start ist das Dashboard unter folgender Adresse erreichbar:
 
-- **Web Dashboard**: [http://localhost:8080](http://localhost:8080)
-- **Swagger API Explorer**: [http://localhost:8080/dashboard/swagger.html](http://localhost:8080/dashboard/swagger.html)
+- **Web Dashboard (HTTPS)**: [https://localhost](https://localhost) (Port 443)
+- **Web Dashboard (HTTP)**: [http://localhost](http://localhost) (Port 80)
+- **Swagger API Explorer**: `https://localhost/dashboard/swagger.html`
 - **REST-API**: `http://localhost:7667/v1`
 
 ### Vorinstallierte Benutzer (`/etc/coriolis/users.yaml`)
