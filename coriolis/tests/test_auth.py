@@ -2,7 +2,6 @@
 # All Rights Reserved.
 
 import tempfile
-import time
 import unittest
 from unittest import mock
 import yaml
@@ -278,7 +277,7 @@ class TokenAuthMiddlewareTestCase(unittest.TestCase):
             self.assertEqual(res.status_code, 200)
             self.assertIn('coriolis.context', req.environ)
             ctx = req.environ['coriolis.context']
-            self.assertEqual(ctx.user, 'validuser')
+            self.assertEqual(ctx.user_id, 'validuser')
             self.assertEqual(ctx.roles, ['admin'])
             self.assertTrue(ctx.is_admin)
 
