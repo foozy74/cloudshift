@@ -256,9 +256,9 @@ Sobald abgeschlossen, steht der Status auf **`COMPLETED`**.
 
 ---
 
-### Schritt 4: Inkrementelle Replikationen (Deltas)
+### Schritt 4: Inkrementelle Replikationen (Deltas im laufenden Betrieb)
 
-Vor dem eigentlichen Wartungsfenster stößt man weitere Executions an. Da Coriolis CBT (Changed Block Tracking) nutzt, werden nur Blöcke übertragen, die sich seit dem letzten Lauf geändert haben.
+Vor dem eigentlichen Wartungsfenster stößt man weitere Executions an. Da Coriolis CBT (Changed Block Tracking) nutzt, werden nur Blöcke übertragen, die sich seit dem letzten Lauf geändert haben. Die Quell-VM läuft dabei ungestört weiter (`shutdown_instances: false` ist der Standard).
 
 **Request:**
 ```bash
@@ -272,49 +272,68 @@ curl -s -X POST "http://localhost:7667/v1/transfers/cb44cbdc-1d3a-4e06-a668-8d21
 
 ---
 
-### Schritt 5: Cutover (Deployment)
+### Schritt 5: Cutover (Finaler Sync, Shutdown & Deployment)
 
-Startet das finale Umschalten:
-1. Quell-VM auf VMware sauber herunterfahren (`shutdown_instances: true`).
-2. Letzter winziger Delta-Sync.
-3. OS-Morphing auf OLVM (VirtIO-Treiber, Bootloader, VMware-Tools deaktivieren).
-4. Start der Ziel-VM auf OLVM.
+Für den eigentlichen Cutover gibt es zwei Wege:
+
+#### Option A (Empfohlen): Vollautomatischer Cutover in einem Aufruf
+Mit `"shutdown_instances": true` und `"auto_deploy": true` steuert Coriolis den gesamten Cutover vollautomatisch:
+1. **`SHUTDOWN_INSTANCE`:** Fährt die Quell-VM auf VMware sauber über `vm.ShutdownGuest()` (VMware Tools) herunter.
+2. **`REPLICATE_DISKS`:** Überträgt die letzten minimalen Deltas der gestoppten VM (100%ige Transaktionskonsistenz).
+3. **`DEPLOYMENT`:** Startet direkt im Anschluss OS-Morphing und Boot auf OLVM.
 
 **Request:**
+```bash
+curl -s -X POST "http://localhost:7667/v1/transfers/cb44cbdc-1d3a-4e06-a668-8d2125460e66/executions" \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: fake-admin-token" \
+  -d '{
+    "execution": {
+      "shutdown_instances": true,
+      "auto_deploy": true
+    }
+  }'
+```
+
+---
+
+#### Option B: Geteilter Ablauf (Finaler Sync und Deployment getrennt)
+
+**1. Finaler Sync mit Herunterfahren der Quell-VM:**
+```bash
+curl -s -X POST "http://localhost:7667/v1/transfers/cb44cbdc-1d3a-4e06-a668-8d2125460e66/executions" \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: fake-admin-token" \
+  -d '{
+    "execution": {
+      "shutdown_instances": true
+    }
+  }'
+```
+
+**2. Nach Abschluss der Execution: Deployment anstoßen:**
 ```bash
 curl -s -X POST "http://localhost:7667/v1/transfers/cb44cbdc-1d3a-4e06-a668-8d2125460e66/deployments" \
   -H "Content-Type: application/json" \
   -H "X-Auth-Token: fake-admin-token" \
   -d '{
     "deployment": {
-      "shutdown_instances": true,
       "skip_os_morphing": false,
       "clone_disks": false
     }
   }'
 ```
 
-**Response (`201 Created`):**
-```json
-{
-  "deployment": {
-    "id": "3bb67ef1-5a22-4819-8671-11882299aa33",
-    "transfer_id": "cb44cbdc-1d3a-4e06-a668-8d2125460e66",
-    "status": "RUNNING",
-    "tasks": [
-      {"name": "SHUTDOWN_SOURCE_INSTANCES", "status": "RUNNING"},
-      {"name": "FINAL_REPLICATION", "status": "PENDING"},
-      {"name": "DEPLOY_TARGET_INSTANCE", "status": "PENDING"},
-      {"name": "OS_MORPHING", "status": "PENDING"},
-      {"name": "START_TARGET_INSTANCE", "status": "PENDING"}
-    ]
-  }
-}
-```
+> [!TIP]
+> **Tipp zu `clone_disks`:**
+> - `"clone_disks": false` (Empfohlen): Verwendet direkt die replizierte Disk. Der Cutover ist in Sekunden abgeschlossen und verbraucht keinen doppelten Speicher.
+> - `"clone_disks": true`: Klont die replizierte Disk vor dem Start. Das Original bleibt als Snapshot-Stand erhalten, erfordert jedoch Kopierzeit und zusätzlichen Storage.
 
-#### Deployment-Status abfragen:
+---
+
+### Deployment-Status abfragen:
 ```bash
-curl -s "http://localhost:7667/v1/transfers/cb44cbdc-1d3a-4e06-a668-8d2125460e66/deployments/3bb67ef1-5a22-4819-8671-11882299aa33" \
+curl -s "http://localhost:7667/v1/transfers/cb44cbdc-1d3a-4e06-a668-8d2125460e66/deployments/<DEPLOYMENT_ID>" \
   -H "X-Auth-Token: fake-admin-token"
 ```
 
@@ -366,7 +385,25 @@ Während der Cutover-Phase führt der temporäre OS-Morphing-Minion per `chroot`
 
 ---
 
-## 5. Bandbreiten- & Dauer-Kalkulation aus den Logs
+## 5. Festplatten-Benennung in OLVM (oVirt)
+
+In OLVM werden die virtuellen Festplatten auf den Storage Domains mit folgenden Namen geführt:
+
+1. **Während der Replikation (Replica Disks):**
+   - Namensmuster: `coriolis-<VM_NAME>-<DISK_ID>`
+   - Beispiel: `coriolis-sbl13155t-disk-2000`
+   - *Zweck:* Eindeutige Kennzeichnung und Kollisionsschutz im OLVM Storage Pool während aktiver Syncs.
+
+2. **Finale Festplatten nach dem Deployment:**
+   - **Bei `clone_disks: false` (Empfohlen):** Die replizierte Platte wird direkt an die Ziel-VM angehängt.
+   - **Bei `clone_disks: true`:** Der Klon wird automatisch sauber benannt als:
+     - Namensmuster: `<VM_NAME>_<DISK_ID>`
+     - Beispiel: `sbl13155t_disk-2000` (statt zufälliger kryptischer IDs wie `clone-b707c622`).
+   - *Hinweis:* Der Anzeigename kann im OLVM Web-Portal (*Compute $\rightarrow$ Virtual Machines $\rightarrow$ Disks $\rightarrow$ Edit*) jederzeit nachträglich angepasst werden.
+
+---
+
+## 6. Bandbreiten- & Dauer-Kalkulation aus den Logs
 
 In den Logs des Workers (`podman logs coriolis-worker`) werden Datenmengen und Zeiten festgehalten:
 
@@ -384,7 +421,7 @@ In den Logs des Workers (`podman logs coriolis-worker`) werden Datenmengen und Z
 
 ---
 
-## 6. Rollback-Strategie
+## 7. Rollback-Strategie
 
 Die Quell-VM auf VMware wird **nicht gelöscht**, sondern verbleibt im Zustand **`Powered Off`**.
 
