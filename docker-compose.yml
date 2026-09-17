@@ -214,13 +214,14 @@ services:
     security_opt:
       - label:disable
     ports:
-      - "8080:80"
+      - "443:443"
+      - "80:80"
     volumes:
       - ./docker/dashboard:/usr/share/nginx/html:ro
+      - ./docker/dashboard/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/dashboard/ssl:/etc/nginx/ssl:ro
     depends_on:
       - api
-    profiles:
-      - dashboard
 
 volumes:
   db_data:
