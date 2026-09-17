@@ -87,6 +87,7 @@ sudo systemctl start rabbitmq-server
 # Debug-Logging
 debug = true
 verbose = true
+default_requests_timeout = 600
 
 # Messaging (RabbitMQ)
 transport_url = rabbit://guest:guest@127.0.0.1:5672/
@@ -105,6 +106,29 @@ connection = mysql+pymysql://coriolis:password@127.0.0.1/coriolis?charset=utf8
 [api]
 api_migration_listen = 0.0.0.0
 api_migration_listen_port = 7667
+
+# ========== Replicator ==========
+
+[replicator]
+port = 4433
+default_requests_timeout = 600
+
+# ========== VMware (Export / Quelle) ==========
+
+[vmware]
+worker_ip = 172.23.219.61
+worker_vm_name = sb-v2v
+auto_attach_disks = True
+worker_ssh_password = VMware.99
+
+# ========== OLVM / oVirt (Import / Ziel) ==========
+
+[olvm]
+# Name des Templates in der OLVM/oVirt-Engine für Minion-VMs:
+minion_template_name = sb-minion-template
+minion_memory_mb = 4096
+minion_vcpus = 2
+writer_port = 6677
 
 # ========== Keystone (optional, für Produktion) ==========
 
