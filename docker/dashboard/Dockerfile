@@ -1,4 +1,5 @@
-FROM nginx:alpine
+ARG BASE_IMAGE=nginx:alpine
+FROM ${BASE_IMAGE}
 
 # Copy nginx config
 COPY nginx.conf /etc/nginx/nginx.conf

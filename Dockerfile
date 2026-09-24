@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+ARG BASE_IMAGE=python:3.11-slim
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.title="CloudShift" \
       org.opencontainers.image.description="VMware to OLVM/Hyper-V Workload Migration as a Service" \
@@ -19,10 +20,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxslt-dev \
     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
+
+# Configure Artifactory PyPI proxy
+ARG ARTIFACTORY_USER=""
+ARG ARTIFACTORY_PW=""
+RUN if [ -n "$ARTIFACTORY_USER" ] && [ -n "$ARTIFACTORY_PW" ]; then \
+        printf "[global]\nindex-url = https://${ARTIFACTORY_USER}:${ARTIFACTORY_PW}@artifactory.three.com/artifactory/api/pypi/pypi-remote/simple\nextra-index-url = https://${ARTIFACTORY_USER}:${ARTIFACTORY_PW}@artifactory.three.com/artifactory/api/pypi/pypi-local/simple\n" > /etc/pip.conf; \
+    else \
+        printf "[global]\nindex-url = https://artifactory.three.com/artifactory/api/pypi/pypi-remote/simple\n" > /etc/pip.conf; \
+    fi
+
 # Upgrade pip and tools
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-WORKDIR /app
 
 # Copy dependency specifications
 COPY requirements.txt /app/

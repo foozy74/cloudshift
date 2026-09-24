@@ -339,19 +339,25 @@ class OLVMoVirtImportProvider(
                         break
                     time.sleep(2)
 
-                vm_service.nics_service().add(
-                    nic=sdk.types.Nic(
-                        name="nic0",
-                        interface=sdk.types.NicInterface.VIRTIO,
-                        vnic_profile=sdk.types.VnicProfile(id=vnic_profile_id),
+                existing_nics = vm_service.nics_service().list()
+                if not existing_nics:
+                    vm_service.nics_service().add(
+                        nic=sdk.types.Nic(
+                            name="nic0",
+                            interface=sdk.types.NicInterface.VIRTIO,
+                            vnic_profile=sdk.types.VnicProfile(id=vnic_profile_id),
+                        )
                     )
-                )
-                LOG.info(
-                    "Successfully added nic0 (ovirtmgmt) to minion VM %s",
-                    vm.id)
+                    LOG.info(
+                        "Successfully added nic0 (ovirtmgmt) to minion VM %s",
+                        vm.id)
+                else:
+                    LOG.info(
+                        "Minion VM %s already has %d NIC(s) from template; skipping nic0 addition",
+                        vm.id, len(existing_nics))
             except Exception as e:
                 LOG.warn(
-                    "Failed to add nic0 (ovirtmgmt) to minion VM %s: %s",
+                    "Failed to check/add nic to minion VM %s: %s",
                     vm.id, e)
 
         return vm
@@ -660,9 +666,18 @@ class OLVMoVirtImportProvider(
                 self._attach_disk_to_vm(
                     conn, minion_vm.id, disk.id, bootable=False)
 
-            # Minion starten
+            # Minion starten mit Cloud-Init
             minion_vm_service = vms_service.vm_service(minion_vm.id)
-            minion_vm_service.start()
+            try:
+                minion_vm_service.start(use_cloud_init=True)
+                LOG.info(
+                    "Started os-morphing minion VM %s with use_cloud_init=True",
+                    minion_vm.id)
+            except Exception as e:
+                LOG.warn(
+                    "Failed to start os-morphing minion with use_cloud_init=True: %s; falling back to standard start()",
+                    e)
+                minion_vm_service.start()
             self._wait_for_vm_up(vms_service, minion_vm.id)
             vm_ip = self._get_vm_ip(conn, minion_vm.id)
 
@@ -926,9 +941,18 @@ class OLVMoVirtImportProvider(
                 self._attach_disk_to_vm(
                     conn, minion_vm.id, vol["volume_id"])
 
-            # VM starten
+            # VM starten mit Cloud-Init
             vm_service = vms_service.vm_service(minion_vm.id)
-            vm_service.start()
+            try:
+                vm_service.start(use_cloud_init=True)
+                LOG.info(
+                    "Started minion VM %s with use_cloud_init=True",
+                    minion_vm.id)
+            except Exception as e:
+                LOG.warn(
+                    "Failed to start minion with use_cloud_init=True: %s; falling back to standard start()",
+                    e)
+                vm_service.start()
             self._wait_for_vm_up(vms_service, minion_vm.id)
 
             # IP ermitteln
