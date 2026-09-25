@@ -1,0 +1,36 @@
+# Keep secrets, local state and large bundles out of the image build context.
+# The images are published; anything copied here becomes public.
+
+# VCS and local tooling
+.git
+.gitignore
+.tox
+.venv
+venv
+.stestr
+.coverage
+cover
+*.egg-info
+build
+dist
+**/__pycache__
+**/*.pyc
+
+# Secrets and environment-specific runtime config (mounted at runtime)
+secrets
+docker/users.yaml
+docker/coriolis.conf
+docker/dashboard/ssl
+**/*.key
+**/*.pem
+.env
+
+# Local scratch and large offline bundles
+tmp
+offline-bundle
+*.tar.gz
+
+# Local AI tooling (graphify knowledge graph, Gemini config)
+.gemini
+graphify-out
+GEMINI.md

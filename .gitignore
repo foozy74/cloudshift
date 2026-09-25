@@ -35,3 +35,6 @@ offline-bundle/
 .gemini/
 graphify-out/
 GEMINI.md
+
+# Dashboard TLS certificate and key, provided per environment
+docker/dashboard/ssl/

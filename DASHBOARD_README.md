@@ -20,6 +20,18 @@ Der Stack besteht aus folgenden Docker-Containern:
 ### Voraussetzungen
 - Docker & Docker Compose
 - Mindestens 4 GB RAM für den vollständigen Stack
+- TLS-Zertifikat für das Dashboard in `docker/dashboard/ssl/` (nicht im Git, wird zur Laufzeit eingebunden):
+  - `cert.crt`: Serverzertifikat inkl. Zwischenzertifikat(e), Serverzertifikat zuerst
+  - `cert.key`: privater Schlüssel ohne Passphrase (`chmod 600`)
+
+  Für Tests genügt ein selbstsigniertes Zertifikat:
+  ```bash
+  mkdir -p docker/dashboard/ssl
+  openssl req -x509 -newkey rsa:3072 -nodes -days 365 \
+    -keyout docker/dashboard/ssl/cert.key -out docker/dashboard/ssl/cert.crt \
+    -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+  ```
+  Für den Betrieb ein Zertifikat der internen CA verwenden (CSR mit allen Hostnamen/IPs im SAN).
 
 ### Starten des Stacks
 

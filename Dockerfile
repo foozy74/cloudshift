@@ -44,7 +44,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy codebase
 COPY . /app/
 
-# Install the CloudShift application (compiles resources via setup.py/make)
+# Install the CloudShift application (compiles resources via setup.py/make).
+# .git is excluded by .dockerignore, so pbr takes the version from here.
+ARG PBR_VERSION=1.3.0
+ENV PBR_VERSION=${PBR_VERSION}
 RUN pip install --no-cache-dir .
 
 # Create configuration directory

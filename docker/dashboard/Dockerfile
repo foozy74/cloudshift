@@ -13,8 +13,8 @@ COPY style.css /usr/share/nginx/html/
 COPY swagger.html /usr/share/nginx/html/
 COPY swagger.json /usr/share/nginx/html/
 
-# Copy SSL certificates
-COPY ssl/ /etc/nginx/ssl/
+# SSL certificates are not baked into the image.
+# Mount them at runtime: ./docker/dashboard/ssl:/etc/nginx/ssl:ro
 
 EXPOSE 80 443
 
