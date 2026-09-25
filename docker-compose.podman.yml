@@ -2,8 +2,9 @@ version: '3.8'
 
 services:
   database:
-    image: docker.registry.it.internal/mariadb:10-jammy
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/mariadb:10-jammy
     container_name: coriolis-db
+    restart: unless-stopped
     security_opt:
       - label:disable
     environment:
@@ -22,8 +23,9 @@ services:
       retries: 5
 
   rabbitmq:
-    image: docker.registry.it.internal/rabbitmq:3-management
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/rabbitmq:3-management
     container_name: coriolis-rabbitmq
+    restart: unless-stopped
     security_opt:
       - label:disable
     ports:
@@ -43,7 +45,7 @@ services:
       retries: 5
 
   db-sync:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-db-sync
     security_opt:
       - label:disable
@@ -55,8 +57,9 @@ services:
         condition: service_healthy
 
   api:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-api
+    restart: unless-stopped
     security_opt:
       - label:disable
     ports:
@@ -76,8 +79,9 @@ services:
         condition: service_completed_successfully
 
   conductor:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-conductor
+    restart: unless-stopped
     security_opt:
       - label:disable
     volumes:
@@ -95,8 +99,9 @@ services:
         condition: service_completed_successfully
 
   worker:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-worker
+    restart: unless-stopped
     hostname: coriolis-worker
     security_opt:
       - label:disable
@@ -117,8 +122,9 @@ services:
         condition: service_completed_successfully
 
   scheduler:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-scheduler
+    restart: unless-stopped
     security_opt:
       - label:disable
     volumes:
@@ -133,8 +139,9 @@ services:
         condition: service_completed_successfully
 
   minion-manager:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-minion-manager
+    restart: unless-stopped
     security_opt:
       - label:disable
     volumes:
@@ -152,8 +159,9 @@ services:
         condition: service_completed_successfully
 
   deployer-manager:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-deployer-manager
+    restart: unless-stopped
     security_opt:
       - label:disable
     volumes:
@@ -171,8 +179,9 @@ services:
         condition: service_completed_successfully
 
   transfer-cron:
-    image: docker.registry.it.internal/thesolution/cloudshift:latest
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-transfer-cron
+    restart: unless-stopped
     security_opt:
       - label:disable
     volumes:
@@ -187,8 +196,9 @@ services:
         condition: service_completed_successfully
 
   dashboard:
-    image: docker.registry.it.internal/thesolution/cloudshift-dashboard:v1.0.0
+    image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift-dashboard:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-dashboard
+    restart: unless-stopped
     security_opt:
       - label:disable
     ports:

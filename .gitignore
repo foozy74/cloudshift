@@ -48,3 +48,6 @@ docker/coriolis.conf
 
 # Backups created by docker/migrate-untracked-config.sh (contain secrets)
 .config-backup-*/
+
+# Backups created by docker/upgrade.sh (contain secrets and DB dumps)
+backups/
