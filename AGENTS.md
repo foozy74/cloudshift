@@ -88,7 +88,7 @@ In coriolis, local `master` tracks `origin/master` (cloudbase), so a bare `git p
 
 This repo is the deployment variant for the internal Drei/three.com environment. Development happens first in the sister repo `../coriolis` (added here as git remote `local-coriolis`); changes are then carried over to this repo. The Python code under `coriolis/` should stay identical to coriolis, so prefer transferring changes from there over editing code here directly. These environment-specific files exist only here or differ from coriolis and must be preserved when transferring:
 
-- `Dockerfile`: `BASE_IMAGE` build arg, PyPI via the `artifactory.three.com` proxy (`ARTIFACTORY_USER`/`ARTIFACTORY_PW`), `CMD cloudshift-api`.
+- `Dockerfile`: `BASE_IMAGE` build arg, PyPI via the `artifactory.three.com` proxy (credentials only as BuildKit secrets `artifactory_user`/`artifactory_pw`, read by `docker/pip-artifactory.sh`; never as build args), `CMD cloudshift-api`.
 - `docker-compose.yml` (images from `docker.registry.it.internal`, `NO_PROXY` for `.three.com`/`.internal`) and `docker-compose.podman.yml`.
 - `setup.cfg`: additional `cloudshift-*` console scripts alongside `coriolis-*`.
 - `.github/workflows/`: `ci.yml` on `main` (Python 3.10–3.13) and `docker-build.yml` (publishes `ghcr.io/thesolution/cloudshift` and `-dashboard` on `v*` tags); no integration-test workflow.

@@ -22,24 +22,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Configure Artifactory PyPI proxy
-ARG ARTIFACTORY_USER=""
-ARG ARTIFACTORY_PW=""
-RUN if [ -n "$ARTIFACTORY_USER" ] && [ -n "$ARTIFACTORY_PW" ]; then \
-        printf "[global]\nindex-url = https://${ARTIFACTORY_USER}:${ARTIFACTORY_PW}@artifactory.three.com/artifactory/api/pypi/pypi-remote/simple\nextra-index-url = https://${ARTIFACTORY_USER}:${ARTIFACTORY_PW}@artifactory.three.com/artifactory/api/pypi/pypi-local/simple\n" > /etc/pip.conf; \
-    else \
-        printf "[global]\nindex-url = https://artifactory.three.com/artifactory/api/pypi/pypi-remote/simple\n" > /etc/pip.conf; \
-    fi
+# Configure Artifactory PyPI proxy. /etc/pip.conf stays anonymous; the
+# credentials are passed as BuildKit secrets and only used by
+# pip-artifactory during the RUN steps (they never land in a layer):
+#   docker build --secret id=artifactory_user,env=ARTIFACTORY_USER \
+#                --secret id=artifactory_pw,env=ARTIFACTORY_PW .
+RUN printf "[global]\nindex-url = https://artifactory.three.com/artifactory/api/pypi/pypi-remote/simple\n" > /etc/pip.conf
+COPY docker/pip-artifactory.sh /usr/local/bin/pip-artifactory
 
 # Upgrade pip and tools
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN --mount=type=secret,id=artifactory_user --mount=type=secret,id=artifactory_pw \
+    pip-artifactory install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copy dependency specifications
 COPY requirements.txt /app/
 COPY test-requirements.txt /app/
 
 # Install python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=secret,id=artifactory_user --mount=type=secret,id=artifactory_pw \
+    pip-artifactory install --no-cache-dir -r requirements.txt
 
 # Copy codebase
 COPY . /app/
@@ -48,7 +49,8 @@ COPY . /app/
 # .git is excluded by .dockerignore, so pbr takes the version from here.
 ARG PBR_VERSION=1.3.0
 ENV PBR_VERSION=${PBR_VERSION}
-RUN pip install --no-cache-dir .
+RUN --mount=type=secret,id=artifactory_user --mount=type=secret,id=artifactory_pw \
+    pip-artifactory install --no-cache-dir .
 
 # Create configuration directory
 RUN mkdir -p /etc/coriolis

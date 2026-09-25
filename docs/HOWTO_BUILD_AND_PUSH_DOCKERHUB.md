@@ -23,6 +23,25 @@ Für offizielle Docker Hub Releases dürfen keine internen Firmen-Mirrors fest i
 * **Dashboard Image (`docker/dashboard/Dockerfile`):**
   Stelle sicher, dass `FROM nginx:alpine` als Basis-Image verwendet wird.
 
+### 2.2 Artifactory-Zugangsdaten und Geheimnisse
+* **Artifactory:** Ohne Zugangsdaten nutzt der Build den anonymen PyPI-Proxy von `artifactory.three.com`. Werden Zugangsdaten gebraucht, **nur als BuildKit-Secret** übergeben, nie als `--build-arg` (Build-Args landen in `docker history` und die frühere Variante schrieb sie in `/etc/pip.conf` im Image):
+  ```bash
+  export ARTIFACTORY_USER=<user>
+  read -s -p "Artifactory-Passwort: " ARTIFACTORY_PW; export ARTIFACTORY_PW; echo
+  docker build \
+    --secret id=artifactory_user,env=ARTIFACTORY_USER \
+    --secret id=artifactory_pw,env=ARTIFACTORY_PW \
+    -t thesolution/cloudshift:latest .
+  # Podman: --secret id=artifactory_user,src=<datei> --secret id=artifactory_pw,src=<datei>
+  ```
+  `docker/pip-artifactory.sh` liest die Secrets nur während der `pip`-Schritte; im fertigen Image bleibt nichts davon.
+* **Nicht im Image:** `.dockerignore` schließt `.git`, `docker/users.yaml`, `docker/coriolis.conf`, `docker/dashboard/ssl/`, `secrets/` und Schlüsseldateien aus. Diese Dateien werden zur Laufzeit per Volume eingebunden (siehe `docker-compose.yml`). Vor jedem Push prüfen:
+  ```bash
+  docker run --rm --entrypoint sh thesolution/cloudshift:latest -c \
+    'ls /app/docker/users.yaml /app/docker/coriolis.conf /app/.git 2>&1 | grep -c "No such file"'
+  # Soll-Ausgabe: 3
+  ```
+
 ---
 
 ## 3. Login bei Docker Hub
