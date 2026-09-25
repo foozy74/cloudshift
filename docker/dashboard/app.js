@@ -1202,7 +1202,7 @@ async function refreshAllData() {
         const endpoints = await fetchList('endpoints');
         registeredEndpoints = endpoints;
         lastEndpointsData = endpoints;
-        const transfers = await fetchList('transfers');
+        const transfers = await withExpandedExecutions(await fetchList('transfers'));
         lastTransfersData = transfers;
         const services = await fetchList('services');
 
@@ -1214,6 +1214,31 @@ async function refreshAllData() {
         console.error("Error refreshing data:", err);
         setAPIStatus(false);
     }
+}
+
+// The transfer list only carries executions with include_task_info=true,
+// which also returns the full task info. Load executions per transfer
+// (GET /transfers/{id} includes them without the task info) and only for
+// the rows that are expanded.
+async function fetchTransferExecutions(id) {
+    const res = await fetchWithAuth(`${API_BASE}/transfers/${id}`, {
+        headers: { 'X-Project-Id': 'admin' }
+    });
+    if (!res.ok) throw new Error(`Failed to load transfer ${id}: ${res.status}`);
+    const data = await res.json();
+    return (data.transfer && data.transfer.executions) || [];
+}
+
+async function withExpandedExecutions(transfers) {
+    return Promise.all(transfers.map(async tf => {
+        if (!expandedTransferIds.includes(tf.id)) return tf;
+        try {
+            return { ...tf, executions: await fetchTransferExecutions(tf.id) };
+        } catch (err) {
+            console.error(err);
+            return tf;
+        }
+    }));
 }
 
 async function fetchList(resource) {
@@ -1436,7 +1461,7 @@ function renderTransfersTable(transfers, endpoints) {
     recentTableBody.innerHTML = rowsHtml;
 }
 
-function toggleTransferDetails(id) {
+async function toggleTransferDetails(id) {
     const idx = expandedTransferIds.indexOf(id);
     if (idx > -1) {
         expandedTransferIds.splice(idx, 1);
@@ -1444,6 +1469,10 @@ function toggleTransferDetails(id) {
         expandedTransferIds.push(id);
     }
     renderTransfersTable(lastTransfersData, lastEndpointsData);
+    if (idx === -1) {
+        lastTransfersData = await withExpandedExecutions(lastTransfersData);
+        renderTransfersTable(lastTransfersData, lastEndpointsData);
+    }
 }
 window.toggleTransferDetails = toggleTransferDetails;
 
