@@ -5,7 +5,7 @@ All notable changes to the CloudShift project will be documented in this file.
 Each release has an **Upgrade-Hinweise** section (new options, manual steps,
 breaking changes). `docker/upgrade.sh` shows it before updating a server.
 
-## [1.4.0] - unreleased
+## [1.3.1] - 2026-09-25
 ### Upgrade-Hinweise
 - **Einmalig für Installationen vor dem 25.09.2026:** zuerst `docker/migrate-untracked-config.sh` ausführen (HOWTO Podman, Abschnitt 10). Danach Updates nur noch mit `sh docker/upgrade.sh <version>`.
 - `.env` neu: `CLOUDSHIFT_VERSION` (Release-Tag statt `latest` eintragen) und optional `CLOUDSHIFT_REGISTRY`.
