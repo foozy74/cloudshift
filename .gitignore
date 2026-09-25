@@ -45,3 +45,6 @@ secrets/
 # Runtime config with credentials, created from the *.example templates
 docker/users.yaml
 docker/coriolis.conf
+
+# Backups created by docker/migrate-untracked-config.sh (contain secrets)
+.config-backup-*/

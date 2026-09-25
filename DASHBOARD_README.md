@@ -41,6 +41,16 @@ Der Stack besteht aus folgenden Docker-Containern:
   ```
   Für den Betrieb ein Zertifikat der internen CA verwenden (CSR mit allen Hostnamen/IPs im SAN).
 
+### Bestehende Installation aktualisieren (einmalig nach dem 25.09.2026)
+
+`main`/`master` wurden neu geschrieben, und `docker/coriolis.conf`, `docker/users.yaml` und `docker/dashboard/ssl/` sind nicht mehr im Git. Ein normales `git pull` schlägt fehl, ein `git reset --hard` würde diese Dateien löschen. Stattdessen im Repo-Verzeichnis **vor** dem Update ausführen:
+
+```bash
+sh docker/migrate-untracked-config.sh            # Remote/Branch optional: origin main
+```
+
+Das Skript sichert die Konfiguration nach `.config-backup-<Zeitstempel>/`, legt `.env` aus den bisherigen Compose-Werten an, setzt den Branch auf den Remote-Stand und stellt die Dateien wieder her. Liegt das Skript im alten Stand noch nicht vor, vorher einzeln holen: `git fetch origin && git show origin/main:docker/migrate-untracked-config.sh > /tmp/migrate.sh && sh /tmp/migrate.sh`. Den Backup-Ordner nach erfolgreichem Start löschen, er enthält Zugangsdaten.
+
 ### Starten des Stacks
 
 1. **Stack starten (inkl. Dashboard & Swagger)**:
