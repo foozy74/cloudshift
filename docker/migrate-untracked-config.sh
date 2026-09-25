@@ -22,12 +22,18 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [ -z "$(git status --porcelain --untracked-files=no)" ] || \
     die "uncommitted changes in tracked files; commit or stash them first"
 
-# Local commits that were never pushed would be lost by the reset.
-if git rev-parse -q --verify "$REMOTE/$BRANCH" >/dev/null; then
-    unpushed=$(git rev-list --count "$REMOTE/$BRANCH..HEAD")
-    [ "$unpushed" -eq 0 ] || \
-        die "$unpushed local commit(s) not on $REMOTE/$BRANCH; push or save them first"
-fi
+git fetch "$REMOTE"
+git rev-parse -q --verify "$REMOTE/$BRANCH" >/dev/null || die "$REMOTE/$BRANCH not found"
+
+# Local commits that were never pushed would be lost by the reset. The
+# rewrite changed commit IDs but kept author date and subject, so a commit
+# only counts as local if the remote has no commit with the same pair.
+remote_commits=$(mktemp)
+trap 'rm -f "$remote_commits"' EXIT
+git log --format='%at %s' "$REMOTE/$BRANCH" > "$remote_commits"
+unpushed=$(git log --format='%at %s' "$REMOTE/$BRANCH..HEAD" | grep -cvxF -f "$remote_commits" || true)
+[ "$unpushed" -eq 0 ] || \
+    die "$unpushed local commit(s) not on $REMOTE/$BRANCH; push or save them first"
 
 echo "1/5 Backing up local config to $BACKUP_DIR/"
 mkdir -p "$BACKUP_DIR"
@@ -69,8 +75,7 @@ with os.fdopen(fd, "w") as f:
 EOF
 fi
 
-echo "3/5 Fetching $REMOTE and resetting $BRANCH to $REMOTE/$BRANCH"
-git fetch "$REMOTE"
+echo "3/5 Resetting $BRANCH to $REMOTE/$BRANCH"
 git reset --hard "$REMOTE/$BRANCH"
 
 echo "4/5 Restoring local config"
