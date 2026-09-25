@@ -102,7 +102,8 @@ services:
       - label:disable
     volumes:
       - ./docker/coriolis.conf:/etc/coriolis/coriolis.conf:ro,z
-      - ~/.ssh:/root/.ssh:ro
+    secrets:
+      - olvm_minion_ssh_key
     environment:
       - NO_PROXY=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal,.three.com
       - no_proxy=localhost,127.0.0.1,172.23.0.0/16,sb-v2v,.internal,.three.com
@@ -201,3 +202,9 @@ services:
 volumes:
   db_data:
   rabbitmq_data:
+
+secrets:
+  # Private SSH key for the OLVM minion (public key lives in the minion template).
+  # Keep the file outside of git; override the location via OLVM_MINION_SSH_KEY_FILE.
+  olvm_minion_ssh_key:
+    file: ${OLVM_MINION_SSH_KEY_FILE:-./secrets/olvm_minion_ssh_key}

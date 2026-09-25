@@ -16,12 +16,28 @@ Diese Anleitung führt Sie Schritt für Schritt durch den gesamten Migrationspro
 Coriolis benötigt auf der Ziel-OLVM-Plattform ein minimales OS-Template zur Erstellung der temporären Worker-VMs (Minions):
 1. Erstellen Sie eine minimale virtuelle Maschine in OLVM (z. B. mit Oracle Linux 8/9) mit installiertem `qemu-guest-agent`.
 2. **CPU-Kompatibilität:** Das Cluster (z. B. `sb1`) bzw. Template muss mindestens ein **`x86-64-v3`** (AVX2)-fähiges CPU-Modell besitzen (z. B. Intel Skylake/CascadeLake/IceLake oder AMD EPYC), damit `glibc` in modernen Gast-Betriebssystemen während des OS-Morphings fehlerfrei läuft.
-3. Fahren Sie die VM herunter und konvertieren Sie diese in OLVM in ein **Template** (z. B. Name: `template-sb-Minion`).
-4. **Template-Name konfigurieren:**
+3. **SSH-Zugang für Coriolis:** Coriolis verbindet sich als `root` per SSH-Key mit dem Minion. Der Key wird nicht per cloud-init eingespielt, sondern muss im Template liegen:
+   ```bash
+   # Schlüsselpaar ohne Passphrase erzeugen (RSA, Ed25519 oder ECDSA)
+   ssh-keygen -t ed25519 -f secrets/olvm_minion_ssh_key -N ""
+
+   # In der Template-VM: Public Key für root hinterlegen
+   mkdir -p /root/.ssh && chmod 700 /root/.ssh
+   cat olvm_minion_ssh_key.pub >> /root/.ssh/authorized_keys
+   chmod 600 /root/.ssh/authorized_keys
+   restorecon -Rv /root/.ssh   # SELinux-Kontext ssh_home_t setzen
+   ```
+   * `sshd -T` muss `permitrootlogin yes` (oder `prohibit-password`) und `pubkeyauthentication yes` liefern.
+   * Ist in OLVM unter „Initial Run“ ein SSH-Key für root gesetzt, in `/etc/cloud/cloud.cfg` `disable_root: 0` setzen, sonst sperrt cloud-init den Root-Login.
+   * Der **Private Key** gehört auf den Docker-Host nach `secrets/olvm_minion_ssh_key` (`chmod 600`, per `.gitignore` ausgeschlossen). `docker-compose.yml` bindet ihn als Compose-Secret nur in den Worker ein (`/run/secrets/olvm_minion_ssh_key`). Ein anderer Ort lässt sich über `OLVM_MINION_SSH_KEY_FILE` setzen.
+   * Test vom Docker-Host: `ssh -i secrets/olvm_minion_ssh_key -o IdentitiesOnly=yes root@<vm-ip> hostname`
+4. Fahren Sie die VM herunter und konvertieren Sie diese in OLVM in ein **Template** (z. B. Name: `template-sb-Minion`).
+5. **Template-Name und SSH-Key konfigurieren:**
    * **Global in `docker/coriolis.conf`:**
      ```ini
      [olvm]
      minion_template_name = template-sb-Minion
+     minion_ssh_key_path = /run/secrets/olvm_minion_ssh_key
      minion_vcpus = 2
      minion_memory_mb = 4096
      ```

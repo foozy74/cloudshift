@@ -184,8 +184,11 @@ Ein Linux-VM-Template auf OLVM, das für Worker-Minions verwendet wird:
 # Schlüsselpaar generieren (einmalig)
 ssh-keygen -t ed25519 -f /etc/coriolis/minion_key -N ""
 
-# Public-Key in Minion-Template einbauen (/root/.ssh/authorized_keys)
+# Public-Key in Minion-Template einbauen (/root/.ssh/authorized_keys, 600,
+# .ssh 700, SELinux: restorecon -Rv /root/.ssh)
 ```
+
+Im Docker-Setup liegt der Private Key unter `secrets/olvm_minion_ssh_key` und wird als Compose-Secret nur in den Worker eingebunden (`minion_ssh_key_path = /run/secrets/olvm_minion_ssh_key`). Details: [MIGRATION_HOWTO.md](MIGRATION_HOWTO.md), Abschnitt B.
 
 ### 4.3 Backup-Writer-Integration
 

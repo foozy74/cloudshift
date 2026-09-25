@@ -126,6 +126,8 @@ worker_ssh_password = VMware.99
 [olvm]
 # Name des Templates in der OLVM/oVirt-Engine für Minion-VMs:
 minion_template_name = sb-minion-template
+# Privater SSH-Key für root-Zugriff auf den Minion (Public Key im Template)
+minion_ssh_key_path = /etc/coriolis/minion_key
 minion_memory_mb = 4096
 minion_vcpus = 2
 writer_port = 6677

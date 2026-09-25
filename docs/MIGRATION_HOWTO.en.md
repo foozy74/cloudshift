@@ -16,12 +16,28 @@ This guide provides a step-by-step walkthrough for migrating virtual machines fr
 Coriolis requires a minimal OS template on the target OLVM platform to instantiate temporary worker VMs (Minions):
 1. Create a minimal VM in OLVM (e.g. running Oracle Linux 8/9) with `qemu-guest-agent` installed.
 2. **CPU Compatibility:** Ensure the cluster (e.g. `sb1`) or template provides a CPU model supporting at least **`x86-64-v3`** (AVX2, e.g. Intel Skylake/CascadeLake/IceLake or AMD EPYC) so modern guest operating systems (`glibc`) run seamlessly during OS morphing.
-3. Shut down the VM and convert it into an OLVM **Template** (e.g. named `template-sb-Minion`).
-4. **Configure Template Name:**
+3. **SSH access for Coriolis:** Coriolis connects to the minion as `root` using an SSH key. The key is not injected via cloud-init, so it must be baked into the template:
+   ```bash
+   # Generate a key pair without passphrase (RSA, Ed25519 or ECDSA)
+   ssh-keygen -t ed25519 -f secrets/olvm_minion_ssh_key -N ""
+
+   # Inside the template VM: add the public key for root
+   mkdir -p /root/.ssh && chmod 700 /root/.ssh
+   cat olvm_minion_ssh_key.pub >> /root/.ssh/authorized_keys
+   chmod 600 /root/.ssh/authorized_keys
+   restorecon -Rv /root/.ssh   # set SELinux context ssh_home_t
+   ```
+   * `sshd -T` must report `permitrootlogin yes` (or `prohibit-password`) and `pubkeyauthentication yes`.
+   * If an SSH key for root is set under "Initial Run" in OLVM, set `disable_root: 0` in `/etc/cloud/cloud.cfg`, otherwise cloud-init blocks root login.
+   * The **private key** goes on the Docker host at `secrets/olvm_minion_ssh_key` (`chmod 600`, excluded via `.gitignore`). `docker-compose.yml` mounts it as a Compose secret into the worker only (`/run/secrets/olvm_minion_ssh_key`). Override the location with `OLVM_MINION_SSH_KEY_FILE`.
+   * Test from the Docker host: `ssh -i secrets/olvm_minion_ssh_key -o IdentitiesOnly=yes root@<vm-ip> hostname`
+4. Shut down the VM and convert it into an OLVM **Template** (e.g. named `template-sb-Minion`).
+5. **Configure template name and SSH key:**
    * **Globally in `docker/coriolis.conf`:**
      ```ini
      [olvm]
      minion_template_name = template-sb-Minion
+     minion_ssh_key_path = /run/secrets/olvm_minion_ssh_key
      minion_vcpus = 2
      minion_memory_mb = 4096
      ```
