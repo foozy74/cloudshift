@@ -59,13 +59,13 @@ Deploy the entire CloudShift suite including the API, background services, Maria
 - **Swagger UI**: ``http://localhost:8080/dashboard/swagger.html``
 - **Coriolis REST API**: ``http://localhost:7667``
 
-3. Preconfigured Accounts:
+3. User Accounts:
 
-Three accounts are preconfigured out-of-the-box in ``/etc/coriolis/users.yaml``:
+Users and their password hashes are defined in ``docker/users.yaml`` (not tracked in git). Create it from ``docker/users.yaml.example``, which explains how to generate the hashes. Typical roles:
 
-- ``admin`` / ``CoriolisAdmin123!``: Full system administration, endpoint management, config editing, and user management (Role: ``admin``)
-- ``operator`` / ``CoriolisOp123!``: Operational control: create, edit, run, cancel, and deploy migrations (Role: ``operator``)
-- ``viewer`` / ``CoriolisView123!``: Read-only inspection mode: browse migrations, endpoints, logs, and system status (Role: ``viewer``)
+- ``admin``: Full system administration, endpoint management, config editing, and user management (Role: ``admin``)
+- ``operator``: Operational control: create, edit, run, cancel, and deploy migrations (Role: ``operator``)
+- ``viewer``: Read-only inspection mode: browse migrations, endpoints, logs, and system status (Role: ``viewer``)
 
 Authentication & Authorization (RBAC)
 -------------------------------------
@@ -80,7 +80,7 @@ Login:
 
     curl -X POST http://localhost:7667/v1/auth/login \
       -H "Content-Type: application/json" \
-      -d '{"username": "admin", "password": "CoriolisAdmin123!"}'
+      -d '{"username": "admin", "password": "<your-password>"}'
 
 Calling Protected APIs:
 ::

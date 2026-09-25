@@ -1,0 +1,30 @@
+# Vorlage für docker/users.yaml (lokale Benutzer für Dashboard und API).
+# Kopieren und die Platzhalter ersetzen:
+#   cp docker/users.yaml.example docker/users.yaml
+# Die echte docker/users.yaml ist per .gitignore ausgeschlossen und darf nicht
+# committet werden.
+#
+# password_hash: PBKDF2-SHA256-Hash, niemals Klartext. Erzeugen mit:
+#   docker exec -it -w / coriolis-api python3 -c \
+#     "import getpass; from coriolis.auth.local_backend import hash_password; print(hash_password(getpass.getpass()))"
+#
+# roles: admin, operator oder viewer. enabled: false sperrt den Benutzer.
+
+users:
+  admin:
+    display_name: Administrator
+    password_hash: "<PBKDF2_HASH>"
+    roles: [admin]
+    enabled: true
+
+  operator:
+    display_name: Operator
+    password_hash: "<PBKDF2_HASH>"
+    roles: [operator]
+    enabled: true
+
+  viewer:
+    display_name: Viewer
+    password_hash: "<PBKDF2_HASH>"
+    roles: [viewer]
+    enabled: true

@@ -41,3 +41,7 @@ docker/dashboard/ssl/
 
 # Local secrets (SSH keys etc.), never commit
 secrets/
+
+# Runtime config with credentials, created from the *.example templates
+docker/users.yaml
+docker/coriolis.conf

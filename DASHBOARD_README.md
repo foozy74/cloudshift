@@ -20,6 +20,12 @@ Der Stack besteht aus folgenden Docker-Containern:
 ### Voraussetzungen
 - Docker & Docker Compose
 - Mindestens 4 GB RAM für den vollständigen Stack
+- Konfiguration aus den Vorlagen anlegen (die echten Dateien sind nicht im Git) und alle `<CHANGE_ME>`/`<PBKDF2_HASH>` ersetzen:
+  ```bash
+  cp docker/coriolis.conf.example docker/coriolis.conf
+  cp docker/users.yaml.example docker/users.yaml
+  ```
+  Fehlt eine der Dateien, legt Docker beim Start an ihrer Stelle ein leeres Verzeichnis an und die Dienste starten nicht.
 - TLS-Zertifikat für das Dashboard in `docker/dashboard/ssl/` (nicht im Git, wird zur Laufzeit eingebunden):
   - `cert.crt`: Serverzertifikat inkl. Zwischenzertifikat(e), Serverzertifikat zuerst
   - `cert.key`: privater Schlüssel ohne Passphrase (`chmod 600`)
@@ -51,7 +57,7 @@ Der Stack besteht aus folgenden Docker-Containern:
 
 ---
 
-## Zugriff & Standard-Anmeldedaten
+## Zugriff & Benutzer
 
 Nach dem Start ist das Dashboard unter folgender Adresse erreichbar:
 
@@ -60,13 +66,15 @@ Nach dem Start ist das Dashboard unter folgender Adresse erreichbar:
 - **Swagger API Explorer**: `https://localhost/dashboard/swagger.html`
 - **REST-API**: `http://localhost:7667/v1`
 
-### Vorinstallierte Benutzer (`/etc/coriolis/users.yaml`)
+### Benutzer (`/etc/coriolis/users.yaml`)
 
-| Benutzername | Kennwort | Rolle | Berechtigungen |
-| :--- | :--- | :--- | :--- |
-| `admin` | `CoriolisAdmin123!` | `admin` | Vollzugriff: Endpunkte, Migrationen, System-Konfiguration (`coriolis.conf`, `policy.yaml`, `users.yaml`), Systemdienste |
-| `operator` | `CoriolisOp123!` | `operator` | Operativer Betrieb: Endpunkte und Migrationen anlegen, ausführen, cancellen und deployen |
-| `viewer` | `CoriolisView123!` | `viewer` | Nur Lesezugriff: Migrationen, Endpunkte und Logs einsehen. Schreibaktionen sind in der UI deaktiviert |
+Die Benutzer und ihre Passwort-Hashes stehen in `docker/users.yaml` (nicht im Git). Vorlage mit Anleitung zum Erzeugen der Hashes: `docker/users.yaml.example`. Typische Rollen:
+
+| Benutzername | Rolle | Berechtigungen |
+| :--- | :--- | :--- |
+| `admin` | `admin` | Vollzugriff: Endpunkte, Migrationen, System-Konfiguration (`coriolis.conf`, `policy.yaml`, `users.yaml`), Systemdienste |
+| `operator` | `operator` | Operativer Betrieb: Endpunkte und Migrationen anlegen, ausführen, cancellen und deployen |
+| `viewer` | `viewer` | Nur Lesezugriff: Migrationen, Endpunkte und Logs einsehen. Schreibaktionen sind in der UI deaktiviert |
 
 ---
 

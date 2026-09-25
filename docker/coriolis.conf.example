@@ -1,18 +1,23 @@
+# Vorlage für docker/coriolis.conf. Kopieren und alle <CHANGE_ME> ersetzen:
+#   cp docker/coriolis.conf.example docker/coriolis.conf
+# Die echte docker/coriolis.conf ist per .gitignore ausgeschlossen und darf
+# nicht committet werden.
+
 [DEFAULT]
 debug = true
 verbose = true
 default_requests_timeout = 600
 
 # Use the rabbitmq container defined in docker-compose
-transport_url = rabbit://guest:guest@rabbitmq:5672/
-messaging_transport_url = rabbit://guest:guest@rabbitmq:5672/
+transport_url = rabbit://<user>:<CHANGE_ME>@rabbitmq:5672/
+messaging_transport_url = rabbit://<user>:<CHANGE_ME>@rabbitmq:5672/
 
 providers = coriolis.providers.vmware.exp.VMwareVSphereExportProvider,coriolis.providers.olvm.imp.OLVMoVirtImportProvider
 
 # ========== Database ==========
 [database]
 # Use the database container defined in docker-compose
-connection = mysql+pymysql://coriolis:coriolis_password@database/coriolis?charset=utf8
+connection = mysql+pymysql://<user>:<CHANGE_ME>@database/coriolis?charset=utf8
 
 # ========== API ==========
 [api]
@@ -36,7 +41,8 @@ default_requests_timeout = 600
 worker_ip = 172.23.219.61
 worker_vm_name = sb-v2v
 auto_attach_disks = True
-worker_ssh_password = VMware.99
+# SSH-Passwort der VMware-Worker-VM
+worker_ssh_password = <CHANGE_ME>
 
 # ========== OLVM / oVirt (Import / Ziel) ==========
 [olvm]
@@ -52,7 +58,8 @@ writer_port = 6677
 [auth]
 # Options: 'hybrid' (local then ldap), 'local', 'ldap', or 'none' (legacy)
 auth_strategy = hybrid
-jwt_secret_key = coriolis-production-secure-jwt-key-2026
+# Zufälliger Schlüssel zum Signieren der Login-Tokens: openssl rand -hex 32
+jwt_secret_key = <CHANGE_ME>
 token_expiration_hours = 8
 local_users_file = /etc/coriolis/users.yaml
 
@@ -66,7 +73,7 @@ insecure = false
 
 # Service account for user search (optional if anonymous search allowed)
 # bind_dn = CN=svc-coriolis,OU=ServiceAccounts,DC=company,DC=local
-# bind_password = SecretServicePassword!
+# bind_password = <CHANGE_ME>
 
 user_base_dn = OU=Users,DC=company,DC=local
 user_search_filter = (&(objectClass=user)(sAMAccountName={username}))
@@ -76,7 +83,3 @@ group_attribute = memberOf
 # Map LDAP groups to Coriolis roles (admin, operator, viewer)
 # role_mapping = CN=CloudShift-Admins,OU=Groups,DC=company,DC=local:admin,CN=CloudShift-Operators,OU=Groups,DC=company,DC=local:operator
 default_role = viewer
-
-
-
-

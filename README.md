@@ -66,11 +66,11 @@ Once started, the services are available at:
 
 The default configuration includes three local accounts in `/etc/coriolis/users.yaml`:
 
-| Username | Password | Role | Permissions |
-| :--- | :--- | :--- | :--- |
-| `admin` | `CoriolisAdmin123!` | `admin` | Full control: manage endpoints, jobs, system config, users, and services |
-| `operator` | `CoriolisOp123!` | `operator` | Operational control: create, edit, run, cancel, and deploy migrations |
-| `viewer` | `CoriolisView123!` | `viewer` | Read-only: inspect migrations, endpoints, logs, and services (UI action-safe) |
+| Username | Role | Permissions |
+| :--- | :--- | :--- |
+| `admin` | `admin` | Full control: manage endpoints, jobs, system config, users, and services |
+| `operator` | `operator` | Operational control: create, edit, run, cancel, and deploy migrations |
+| `viewer` | `viewer` | Read-only: inspect migrations, endpoints, logs, and services (UI action-safe) |
 
 > [!IMPORTANT]
 > Change default passwords before deploying to production environments by updating `/etc/coriolis/users.yaml` or using the Configuration API.
@@ -86,7 +86,7 @@ CloudShift supports modern, secure token authentication directly out-of-the-box 
    ```bash
    curl -X POST http://localhost:7667/v1/auth/login \
      -H "Content-Type: application/json" \
-     -d '{"username": "admin", "password": "CoriolisAdmin123!"}'
+     -d '{"username": "admin", "password": "<your-password>"}'
    ```
    **Response**:
    ```json

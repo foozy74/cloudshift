@@ -119,7 +119,7 @@ default_requests_timeout = 600
 worker_ip = 172.23.219.61
 worker_vm_name = sb-v2v
 auto_attach_disks = True
-worker_ssh_password = VMware.99
+worker_ssh_password = <CHANGE_ME>
 
 # ========== OLVM / oVirt (Import / Ziel) ==========
 
