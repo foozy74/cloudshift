@@ -202,6 +202,8 @@ Hinweise:
 * `.env` wird aus dem Projektverzeichnis gelesen. Den Befehl deshalb immer aus `/appl/containers/cloudshift` starten.
 * **Version:** `CLOUDSHIFT_VERSION` in `.env` legt fest, welche Image-Version läuft (Core und Dashboard). Für den Betrieb einen Release-Tag eintragen (z. B. `1.4.0`), nicht `latest`: nur so sind Updates und Rollbacks nachvollziehbar. `CLOUDSHIFT_REGISTRY` ist standardmäßig `docker.registry.it.internal`.
 * Alle Dienste außer `db-sync` haben `restart: unless-stopped`, Abstürze beim Start (z. B. wenn der Conductor noch nicht bereit ist) behebt Podman damit selbst.
+* **Getestet mit den Paketen aus Oracle Linux 8:** Podman 4.9.4-rhel und podman-compose 1.0.6 (EPEL): Neuinstallation, Update und automatischer Rollback. podman-compose 1.0.x ignoriert `depends_on`-Bedingungen; die Dienste hängen deshalb nicht von `db-sync` ab (sonst bleiben sie nach dessen Ende im Status `Created`).
+* `podman ps` zeigt bei `coriolis-db` und `coriolis-rabbitmq` `(healthy)` erst, wenn systemd die Healthchecks ausführt (rootless: Linger aktiv, Benutzer-Session vorhanden).
 * Besonderheiten der Compose-Datei: Images von `docker.registry.it.internal`, keine Build-Schritte, `label:disable` bzw. `:z` für SELinux, Ports `443`, `8080`, `7667`, `13306`.
 
 ---

@@ -44,6 +44,11 @@ services:
       timeout: 5s
       retries: 5
 
+  # podman-compose 1.0.x (RHEL/OL 8 EPEL) ignores depends_on conditions and
+  # turns them into hard `--requires` links; a dependency on this one-shot
+  # service then blocks every dependent container once it has exited. The
+  # services therefore do not depend on db-sync; docker/upgrade.sh checks its
+  # exit code, and restart: unless-stopped covers the start order.
   db-sync:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
     container_name: coriolis-db-sync
@@ -75,8 +80,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      db-sync:
-        condition: service_completed_successfully
 
   conductor:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
@@ -95,8 +98,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      db-sync:
-        condition: service_completed_successfully
 
   worker:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
@@ -118,8 +119,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      db-sync:
-        condition: service_completed_successfully
 
   scheduler:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
@@ -135,8 +134,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      db-sync:
-        condition: service_completed_successfully
 
   minion-manager:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
@@ -155,8 +152,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      db-sync:
-        condition: service_completed_successfully
 
   deployer-manager:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
@@ -175,8 +170,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      db-sync:
-        condition: service_completed_successfully
 
   transfer-cron:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift:${CLOUDSHIFT_VERSION:-latest}
@@ -192,8 +185,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      db-sync:
-        condition: service_completed_successfully
 
   dashboard:
     image: ${CLOUDSHIFT_REGISTRY:-docker.registry.it.internal}/thesolution/cloudshift-dashboard:${CLOUDSHIFT_VERSION:-latest}
