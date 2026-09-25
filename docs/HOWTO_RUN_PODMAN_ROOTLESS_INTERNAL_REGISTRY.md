@@ -1,10 +1,28 @@
 # How-To: CloudShift mit Rootless Podman über die interne Registry betreiben
 
-Dieses Dokument beschreibt, wie die CloudShift-Container auf einer Oracle Linux / RHEL VM unter einem unprivilegierten (rootless) Benutzer betrieben werden, wobei die Container-Images über die interne Firmen-Registry (`docker.registry.it.internal` / Artifactory) bezogen werden.
+Dieses Dokument beschreibt die Neuinstallation von CloudShift auf einer Oracle Linux / RHEL VM unter einem unprivilegierten (rootless) Benutzer. Die Container-Images kommen über die interne Firmen-Registry (`docker.registry.it.internal` / Artifactory).
+
+Für ein **Update einer bestehenden Installation** (Stand vor dem 25.09.2026) siehe [Abschnitt 10](#10-bestehende-installation-aktualisieren).
 
 ---
 
-## 1. Architektur & Funktionsweise
+## Inhalt
+
+1. [Architektur](#1-architektur)
+2. [Voraussetzungen auf der VM (root)](#2-voraussetzungen-auf-der-vm-root)
+3. [Projekt bereitstellen](#3-projekt-bereitstellen)
+4. [Geheimnisse und Konfiguration anlegen](#4-geheimnisse-und-konfiguration-anlegen)
+5. [Images holen und Stack starten](#5-images-holen-und-stack-starten)
+6. [Prüfen](#6-prüfen)
+7. [Autostart nach Reboot](#7-autostart-nach-reboot)
+8. [Netzwerk und Firewall](#8-netzwerk-und-firewall)
+9. [Betrieb](#9-betrieb)
+10. [Bestehende Installation aktualisieren](#10-bestehende-installation-aktualisieren)
+11. [Troubleshooting](#11-troubleshooting)
+
+---
+
+## 1. Architektur
 
 ```
 +------------------+         +-------------------------------+         +----------------------------+
@@ -16,164 +34,295 @@ Dieses Dokument beschreibt, wie die CloudShift-Container auf einer Oracle Linux 
   - thesolution/...-dashboard                                               thesolution/cloudshift:...
 ```
 
-1. Neue Images werden vom Entwickler-Mac nach **Docker Hub** gepusht.
-2. Die VM im Firmennetz fragt die **interne Registry** an: `docker.registry.it.internal/thesolution/...`.
-3. Die interne Registry lädt das Image automatisch von Docker Hub nach, speichert es im Cache und liefert es an die VM aus.
+1. Neue Images werden vom Entwickler-Mac nach **Docker Hub** gepusht (siehe [HOWTO_BUILD_AND_PUSH_DOCKERHUB.md](HOWTO_BUILD_AND_PUSH_DOCKERHUB.md)).
+2. Die VM fragt die **interne Registry** an: `docker.registry.it.internal/thesolution/...`.
+3. Die Registry lädt das Image von Docker Hub nach, cacht es und liefert es an die VM aus.
+
+**Was nicht im Image und nicht im Git liegt** (wird auf der VM angelegt und zur Laufzeit eingebunden):
+
+| Datei | Inhalt | Vorlage |
+|---|---|---|
+| `.env` | Passwörter MariaDB/RabbitMQ, Erlang-Cookie | `.env.example` |
+| `docker/coriolis.conf` | Hauptkonfiguration inkl. DB-/RabbitMQ-URL, JWT-Schlüssel, VMware-Worker-Passwort | `docker/coriolis.conf.example` |
+| `docker/users.yaml` | Dashboard-/API-Benutzer mit Passwort-Hashes | `docker/users.yaml.example` |
+| `docker/dashboard/ssl/cert.crt`, `cert.key` | TLS-Zertifikat für das Dashboard | – (interne CA) |
+| `secrets/olvm_minion_ssh_key` | Privater SSH-Key für die OLVM-Minions | – |
 
 ---
 
-## 2. System-Voraussetzungen auf der VM
+## 2. Voraussetzungen auf der VM (root)
 
 Gemäß der Unternehmensrichtlinie (*PODMAN rootless setup on Linux*):
 
 * **OS:** Oracle Linux / RHEL 8 oder neuer (mit RHCK-Kernel und cgroup v2).
-* **Benutzer:** Eigener unprivilegierter OS-User, standardmäßig: **`container`**.
-* **Filesystem:** Dediziertes Filesystem gemountet unter **`/appl/containers`** (10–50 GB).
-* **Linger-Modus:** Aktiviert via `loginctl enable-linger container` (Container laufen auch nach SSH-Logout weiter).
+* **Pakete:** `podman`, `podman-compose` (aktuelle Version, unterstützt `secrets:`), `git`, `openssl`.
+* **Benutzer:** Eigener unprivilegierter OS-User, standardmäßig **`container`**.
+* **Filesystem:** Dediziertes Filesystem unter **`/appl/containers`** (10–50 GB).
+* **Linger-Modus:** `loginctl enable-linger container` (Container laufen nach dem SSH-Logout weiter, User-Units starten beim Boot).
 * **Port-Regel:** `net.ipv4.ip_unprivileged_port_start=443`
   - Der Rootless-User darf Ports **>= 443** binden (z. B. 443, 7667, 13306).
-  - Ports **unter 443 (wie Port 80)** sind für Rootless-User gesperrt!
+  - Ports **unter 443 (wie Port 80)** sind gesperrt, HTTP läuft deshalb auf `8080`.
 
 ---
 
-## 3. Vorbereitung auf der VM
+## 3. Projekt bereitstellen
 
-### 3.1 Als Container-User anmelden
 ```bash
 sudo su - container
-# oder direkt per SSH als Benutzer 'container' einloggen
-```
 
-### 3.2 Temporäres Verzeichnis für Image-Downloads einrichten
-Um den Fehler `no space left on device` beim Entpacken großer Container-Blobs unter `/var/tmp` zu vermeiden, legen wir einen Temp-Ordner im großen `/appl/containers`-Dateisystem an:
-
-```bash
+# Temp-Verzeichnis im großen Filesystem (vermeidet "no space left on device" beim Pull)
 mkdir -p /appl/containers/tmp
+echo 'export TMPDIR=/appl/containers/tmp' >> ~/.bashrc
 export TMPDIR=/appl/containers/tmp
 
-# Dauerhaft in ~/.bashrc des Users 'container' hinterlegen:
-echo 'export TMPDIR=/appl/containers/tmp' >> ~/.bashrc
-```
-
-### 3.3 SSH-Verzeichnis für den Worker vorbereiten
-Der `coriolis-worker` Container bindet standardmäßig `~/.ssh` ein:
-```bash
-mkdir -p ~/.ssh
-chmod 700 ~/.ssh
-```
-
----
-
-## 4. Projektverzeichnis & Dateien bereitstellen
-
-Das Projektverzeichnis gehört in das dedizierte Filesystem unter `/appl/containers/`:
-
-```bash
-mkdir -p /appl/containers/cloudshift
+# Projekt holen
+git clone https://github.com/foozy74/cloudshift.git /appl/containers/cloudshift
 cd /appl/containers/cloudshift
 ```
 
-### Benötigte Dateistruktur:
-Kopiere folgende Dateien aus dem Repository auf die VM:
+Benötigt werden aus dem Repository nur: `docker-compose.podman.yml`, `.env.example`, `docker/` (Vorlagen, `dashboard/nginx.conf`) und `etc/coriolis/` (`api-paste.ini`, `policy.yaml`). Ohne Git-Zugang können diese Dateien auch kopiert werden.
 
-```text
-/appl/containers/cloudshift/
-├── docker-compose.podman.yml     <-- Speziell angepasste Compose-Datei
-├── docker/
-│   ├── coriolis.conf            <-- Coriolis Hauptkonfiguration
-│   ├── users.yaml               <-- Benutzer/Auth-Konfiguration
-│   └── dashboard/
-│       ├── nginx.conf           <-- Nginx Konfiguration
-│       ├── ssl/                 <-- Zertifikate (cert.crt, cert.key)
-│       └── ...                  <-- Dashboard Web-Assets
-└── etc/
-    └── coriolis/
-        ├── api-paste.ini        <-- Paste-Deploy Pipeline
-        └── policy.yaml          <-- RBAC Berechtigungen
+---
+
+## 4. Geheimnisse und Konfiguration anlegen
+
+> **Neue Werte verwenden.** Passwörter, JWT-Schlüssel und Zertifikate, die früher im Repository standen, gelten als kompromittiert und dürfen nicht wiederverwendet werden.
+
+> **Alle Dateien vor dem ersten Start anlegen.** Fehlt eine eingebundene Datei, legt Podman an ihrer Stelle ein leeres Verzeichnis an und die Dienste starten nicht.
+
+### 4.1 Compose-Secrets (`.env`)
+
+```bash
+cp .env.example .env
+chmod 600 .env
+openssl rand -hex 24      # je einmal für DB_ROOT_PASSWORD, DB_PASSWORD, RABBITMQ_PASSWORD, RABBITMQ_ERLANG_COOKIE
+vi .env
+```
+
+### 4.2 Hauptkonfiguration (`docker/coriolis.conf`)
+
+```bash
+cp docker/coriolis.conf.example docker/coriolis.conf
+vi docker/coriolis.conf
+```
+
+Diese Werte müssen **zur `.env` passen**:
+
+| Option | Wert |
+|---|---|
+| `[DEFAULT] transport_url`, `messaging_transport_url` | `rabbit://<RABBITMQ_USER>:<RABBITMQ_PASSWORD>@rabbitmq:5672/` |
+| `[database] connection` | `mysql+pymysql://coriolis:<DB_PASSWORD>@database/coriolis?charset=utf8` |
+
+Außerdem setzen:
+
+| Option | Wert |
+|---|---|
+| `[auth] jwt_secret_key` | neu erzeugen: `openssl rand -hex 32` |
+| `[vmware] worker_ip`, `worker_vm_name`, `worker_ssh_password` | VMware-Worker-VM (HotAdd-Proxy) |
+| `[olvm] minion_template_name` | Name des Minion-Templates in OLVM |
+| `[olvm] minion_ssh_key_path` | unverändert lassen: `/run/secrets/olvm_minion_ssh_key` |
+
+### 4.3 Benutzer (`docker/users.yaml`)
+
+```bash
+cp docker/users.yaml.example docker/users.yaml
+
+# Hash pro Benutzer erzeugen (Passwort wird verdeckt abgefragt)
+podman run --rm -it -w / docker.registry.it.internal/thesolution/cloudshift:latest \
+  python3 -c "import getpass; from coriolis.auth.local_backend import hash_password; print(hash_password(getpass.getpass()))"
+
+vi docker/users.yaml      # <PBKDF2_HASH> je Benutzer ersetzen
+```
+
+Rollen: `admin`, `operator`, `viewer`. Mit `enabled: false` wird ein Benutzer gesperrt.
+
+### 4.4 TLS-Zertifikat (`docker/dashboard/ssl/`)
+
+nginx erwartet genau zwei Dateien:
+
+* `cert.crt`: Serverzertifikat **plus** Zwischenzertifikat(e), das Serverzertifikat zuerst
+* `cert.key`: privater Schlüssel **ohne Passphrase**
+
+```bash
+mkdir -p docker/dashboard/ssl
+cd docker/dashboard/ssl
+
+# Schlüssel und CSR erzeugen (alle Hostnamen/IPs des Dashboards in den SAN)
+openssl req -new -newkey rsa:3072 -nodes -keyout cert.key -out cloudshift.csr \
+  -subj "/CN=<fqdn>/O=Drei" \
+  -addext "subjectAltName=DNS:<fqdn>,DNS:<hostname>,IP:<vm-ip>"
+chmod 600 cert.key
+
+# cloudshift.csr bei der internen CA einreichen, danach die Kette zusammenbauen:
+cat server.crt intermediate.crt > cert.crt
+
+# Prüfen: beide Hashes müssen gleich sein
+openssl x509 -noout -pubkey -in cert.crt | openssl sha256
+openssl pkey -pubout -in cert.key | openssl sha256
+cd -
+```
+
+Nur für Tests: ein selbstsigniertes Zertifikat, siehe `DASHBOARD_README.md`.
+
+### 4.5 SSH-Key für die OLVM-Minions (`secrets/`)
+
+Coriolis verbindet sich als `root` per SSH-Key mit den Minion-VMs.
+
+```bash
+# Schlüsselpaar ohne Passphrase (RSA, Ed25519 oder ECDSA)
+mkdir -p secrets
+ssh-keygen -t ed25519 -N "" -f secrets/olvm_minion_ssh_key
+chmod 600 secrets/olvm_minion_ssh_key
+```
+
+Den **öffentlichen** Schlüssel (`secrets/olvm_minion_ssh_key.pub`) im OLVM-Minion-Template hinterlegen: `/root/.ssh/authorized_keys` (Rechte 600, `.ssh` 700, `restorecon -Rv /root/.ssh`). Anschließend das Template neu erzeugen. Details: [MIGRATION_HOWTO.md](MIGRATION_HOWTO.md), Abschnitt B.
+
+Ein anderer Ort für den privaten Schlüssel lässt sich über `OLVM_MINION_SSH_KEY_FILE` in `.env` setzen.
+
+### 4.6 Kontrolle
+
+```bash
+ls -l .env docker/coriolis.conf docker/users.yaml docker/dashboard/ssl/cert.crt \
+      docker/dashboard/ssl/cert.key secrets/olvm_minion_ssh_key
+grep -c '<CHANGE_ME>\|<PBKDF2_HASH>' .env docker/coriolis.conf docker/users.yaml   # überall 0
 ```
 
 ---
 
-## 5. Besonderheiten der `docker-compose.podman.yml`
+## 5. Images holen und Stack starten
 
-Die Datei [`docker-compose.podman.yml`](../docker-compose.podman.yml) ist bereits für diese Umgebung vorkonfiguriert:
-
-1. **Image-Quellen:** Alle Images verweisen auf `docker.registry.it.internal/...`.
-2. **Ports:** 
-   - Dashboard HTTPS: Port `443:443` (erlaubt da >= 443).
-   - Dashboard HTTP: Auf Port `8080:80` umgeleitet (Port 80 wird vermieden).
-   - API: Port `7667:7667`.
-   - MariaDB: Port `13306:3306`.
-3. **Keine lokalen Build-Schritte:** Vorkompilierte Images werden direkt bezogen.
-4. **SELinux-Flags:** Alle gemounteten Volumes besitzen das `:z`-Flag.
-
----
-
-## 6. Container-Betrieb
-
-### 6.1 Images vorab manuell testen / pullen (optional)
 ```bash
-podman pull docker.registry.it.internal/thesolution/cloudshift:latest
-podman pull docker.registry.it.internal/thesolution/cloudshift-dashboard:latest
-```
-
-### 6.2 Stack starten
-```bash
-cd /appl/containers/cloudshift
-
+podman login docker.registry.it.internal      # falls die Registry eine Anmeldung verlangt
+podman-compose -f docker-compose.podman.yml pull
 podman-compose -f docker-compose.podman.yml up -d
-# Alternativ, falls podman compose als Plugin vorhanden ist:
-# podman compose -f docker-compose.podman.yml up -d
 ```
 
-### 6.3 Status und Healthchecks überprüfen
-```bash
-podman ps
-```
-Alle Container sollten den Status `Up` (und MariaDB/RabbitMQ `healthy`) aufweisen.
+Hinweise:
 
-### 6.4 Logs überwachen
+* `.env` wird aus dem Projektverzeichnis gelesen. Den Befehl deshalb immer aus `/appl/containers/cloudshift` starten.
+* Das Dashboard ist in `docker-compose.podman.yml` auf `cloudshift-dashboard:v1.0.0` fixiert. Empfohlen ist ein aktueller Tag (z. B. `1.3.0-beaf93a`). Ältere Images enthalten noch das früher veröffentlichte Zertifikat, das durch den `ssl/`-Mount aber überdeckt wird.
+* Besonderheiten der Compose-Datei: Images von `docker.registry.it.internal`, keine Build-Schritte, `label:disable` bzw. `:z` für SELinux, Ports `443`, `8080`, `7667`, `13306`.
+
+---
+
+## 6. Prüfen
+
 ```bash
-# Alle Logs mitverfolgen:
+podman ps -a                                   # coriolis-db-sync: Exited (0), alle anderen: Up
+podman logs coriolis-db-sync | tail
+
+curl -sk -o /dev/null -w '%{http_code}\n' https://localhost/                          # 200
+curl -s  -o /dev/null -w '%{http_code}\n' http://localhost:7667/v1/admin/transfers    # 401 (ohne Login erwartet)
+podman exec coriolis-worker ls -l /run/secrets/olvm_minion_ssh_key                   # Secret vorhanden
+openssl s_client -connect localhost:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer   # interne CA
+```
+
+Danach im Browser `https://<VM-IP-oder-Hostname>/` öffnen und mit einem der neu angelegten Benutzer anmelden.
+
+---
+
+## 7. Autostart nach Reboot
+
+Die Compose-Datei setzt keine `restart:`-Policy. Damit der Stack nach einem Neustart der VM wieder startet, eine systemd-User-Unit anlegen (als `container`, Linger muss aktiv sein):
+
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/cloudshift.service <<'EOF'
+[Unit]
+Description=CloudShift (podman-compose)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/appl/containers/cloudshift
+Environment=TMPDIR=/appl/containers/tmp
+ExecStart=/usr/bin/podman-compose -f docker-compose.podman.yml up -d
+ExecStop=/usr/bin/podman-compose -f docker-compose.podman.yml down
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable cloudshift.service
+```
+
+Den Pfad zu `podman-compose` bei Bedarf mit `command -v podman-compose` anpassen.
+
+---
+
+## 8. Netzwerk und Firewall
+
+| Richtung | Ziel | Port | Zweck |
+|---|---|---|---|
+| eingehend | VM | 443 | Dashboard (HTTPS) |
+| eingehend | VM | 8080 | Dashboard (HTTP) |
+| eingehend | VM | 7667 | REST-API |
+| ausgehend | vCenter | 443 | VMware-API |
+| ausgehend | ESXi-Hosts | 902 | Disk-Zugriff |
+| ausgehend | OLVM-Engine | 443 | oVirt-API |
+| ausgehend | Minion-VMs auf OLVM | 22, 6677, 4433 | SSH, Backup-Writer, Replicator |
+
+**MariaDB (`13306`) und RabbitMQ (`5672`, `15672`)** werden von der Compose-Datei ebenfalls auf dem Host freigegeben. Die Dienste brauchen das nicht, sie sprechen über das interne Container-Netz. Diese Ports per Firewall sperren.
+
+Interne Netze (`172.23.0.0/16`, `.internal`, `.three.com`) sind in der Compose-Datei bereits als `NO_PROXY` gesetzt.
+
+---
+
+## 9. Betrieb
+
+```bash
+# Logs
 podman-compose -f docker-compose.podman.yml logs -f
-
-# Spezifische Logs (z. B. DB-Sync oder API):
-podman logs -f coriolis-db-sync
 podman logs -f coriolis-api
-```
 
-### 6.5 Stack stoppen / neustarten
-```bash
-# Stoppen:
-podman-compose -f docker-compose.podman.yml down
-
-# Neustart eines einzelnen Dienstes (z. B. Conductor):
+# Einzelnen Dienst neu starten (z. B. nach Änderung von coriolis.conf)
 podman restart coriolis-conductor
+
+# Stack stoppen / starten
+podman-compose -f docker-compose.podman.yml down
+podman-compose -f docker-compose.podman.yml up -d
+
+# Update auf neue Images
+podman-compose -f docker-compose.podman.yml pull
+podman-compose -f docker-compose.podman.yml up -d
 ```
 
----
-
-## 7. Zugriff auf CloudShift
-
-* **Web Dashboard:** `https://<VM-IP-oder-Hostname>`
-  *(bzw. HTTP unter `http://<VM-IP-oder-Hostname>:8080`)*
-* **REST API:** `http://<VM-IP-oder-Hostname>:7667`
+**Passwort ändern:** neue Werte in `.env` **und** `docker/coriolis.conf` eintragen. MariaDB übernimmt `DB_PASSWORD` nur bei der Erstinitialisierung, bei einer bestehenden Datenbank zusätzlich `ALTER USER 'coriolis'@'%' IDENTIFIED BY '<neu>';` ausführen. Danach den Stack neu starten.
 
 ---
 
-## 8. Troubleshooting
+## 10. Bestehende Installation aktualisieren
 
-### Problem 1: `no image found in image index for architecture "amd64"`
-* **Ursache:** Das Image wurde auf dem Entwickler-Mac als ARM64 gebaut und zu Docker Hub geladen, oder die interne Registry hat noch das alte ARM64-Manifest im Cache.
-* **Lösung:** 
-  1. Auf dem Mac mit `--platform linux/amd64` neu bauen und mit einem Versions-Tag (z. B. `v1.0.1`) nach Docker Hub pushen.
-  2. Auf der VM das Image mit dem neuen Tag ziehen:
-     ```bash
-     podman pull docker.registry.it.internal/thesolution/cloudshift:v1.0.1
-     ```
+Für Installationen mit dem Stand **vor dem 25.09.2026**: `main` wurde neu geschrieben, und `coriolis.conf`, `users.yaml` und `ssl/` sind nicht mehr im Git. Ein `git pull` schlägt fehl, ein `git reset --hard` würde die Dateien löschen. Stattdessen:
 
-### Problem 2: `no space left on device` beim Image-Pull
-* **Ursache:** `/var/tmp` auf der Root-Partition (`/`) ist voll.
+```bash
+cd /appl/containers/cloudshift
+git fetch origin
+git show origin/main:docker/migrate-untracked-config.sh > /tmp/migrate.sh
+sh /tmp/migrate.sh                     # sichert die Konfiguration, legt .env an, aktualisiert, stellt wieder her
+podman-compose -f docker-compose.podman.yml up -d
+rm -rf .config-backup-*                # erst wenn alles läuft (enthält Zugangsdaten)
+```
+
+Danach die Abschnitte [4.5](#45-ssh-key-für-die-olvm-minions-secrets) (Minion-Key als Secret statt `~/.ssh`) und [7](#7-autostart-nach-reboot) ergänzen und die früher veröffentlichten Zugangsdaten tauschen.
+
+---
+
+## 11. Troubleshooting
+
+### `no image found in image index for architecture "amd64"`
+* **Ursache:** Das Image wurde nur für ARM64 gebaut, oder die interne Registry hat noch ein altes Manifest im Cache.
+* **Lösung:** Multi-Arch bauen (`--platform linux/amd64,linux/arm64`), mit neuem Versions-Tag pushen und diesen Tag ziehen:
+  ```bash
+  podman pull docker.registry.it.internal/thesolution/cloudshift:<neuer-tag>
+  ```
+
+### `no space left on device` beim Image-Pull
+* **Ursache:** `/var/tmp` auf der Root-Partition ist voll.
 * **Lösung:**
   ```bash
   rm -rf /var/tmp/container_images_storage*
@@ -181,6 +330,26 @@ podman restart coriolis-conductor
   podman system prune -a
   ```
 
-### Problem 3: `permission denied` beim Binden von Port 80
-* **Ursache:** Der Rootless-Modus erlaubt laut Kernel-Konfiguration erst Ports ab 443.
-* **Lösung:** Sicherstellen, dass in `docker-compose.podman.yml` für das Dashboard Port `443:443` oder `8080:80` verwendet wird, keinesfalls `80:80`.
+### `permission denied` beim Binden von Port 80
+* **Ursache:** Rootless darf erst Ports ab 443 binden.
+* **Lösung:** Für das Dashboard `443:443` oder `8080:80` verwenden, nie `80:80`.
+
+### `required variable DB_ROOT_PASSWORD is missing a value`
+* **Ursache:** `.env` fehlt oder der Befehl wurde nicht im Projektverzeichnis gestartet.
+* **Lösung:** `cd /appl/containers/cloudshift` und `.env` nach [4.1](#41-compose-secrets-env) anlegen.
+
+### Dienst startet nicht, `is a directory` im Log
+* **Ursache:** Eine eingebundene Datei (`coriolis.conf`, `users.yaml`, Zertifikat) fehlte beim Start, und Podman hat stattdessen ein Verzeichnis angelegt.
+* **Lösung:** Stack stoppen, das leere Verzeichnis löschen, die Datei nach [Abschnitt 4](#4-geheimnisse-und-konfiguration-anlegen) anlegen, neu starten.
+
+### Dashboard: `cannot load certificate` (nginx startet nicht)
+* **Ursache:** `docker/dashboard/ssl/cert.crt` oder `cert.key` fehlt, der Schlüssel hat eine Passphrase oder passt nicht zum Zertifikat.
+* **Lösung:** Dateien nach [4.4](#44-tls-zertifikat-dockerdashboardssl) prüfen und `podman restart coriolis-dashboard`.
+
+### Login schlägt fehl
+* **Ursache:** In `users.yaml` steht Klartext oder ein falsch kopierter Hash, oder `jwt_secret_key` wurde geändert (bestehende Sitzungen werden ungültig).
+* **Lösung:** Hash neu erzeugen ([4.3](#43-benutzer-dockerusersyaml)), `podman restart coriolis-api`, im Browser neu anmelden.
+
+### Migration hängt beim Minion (SSH)
+* **Ursache:** Der öffentliche Schlüssel fehlt im Minion-Template, oder das Secret ist nicht im Worker angekommen.
+* **Lösung:** `podman exec coriolis-worker ls -l /run/secrets/olvm_minion_ssh_key` prüfen und das Template nach [4.5](#45-ssh-key-für-die-olvm-minions-secrets) kontrollieren.
