@@ -7,6 +7,9 @@ from coriolis.api.v1.views import utils as view_utils
 
 def _format_transfer(transfer, keys=None):
     transfer_dict = view_utils.format_opt(transfer, keys)
+    if 'info' in transfer_dict:
+        transfer_dict['info'] = view_utils.redact_sensitive_info(
+            transfer_dict['info'])
 
     executions = transfer_dict.get('executions', [])
     transfer_dict['executions'] = [

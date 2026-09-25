@@ -46,3 +46,58 @@ class ViewUtilsTestCase(test_base.CoriolisBaseTestCase):
             expected_result,
             result
         )
+
+    def test_redact_sensitive_info(self):
+        task_info = {
+            "instance_name": "web01",
+            "target_resources_connection_info": {
+                "ip": "10.0.0.5",
+                "username": "root",
+                "password": "engine_secret",
+                "pkey": "-----BEGIN RSA PRIVATE KEY-----",
+            },
+            "osmorphing_connection_info": {
+                "minion_password": "minion_secret",
+                "certificates": {"client_key": "key_data"},
+            },
+            "volumes_info": [
+                {"disk_id": "disk1", "private_key": "vol_secret"}],
+        }
+
+        expected_result = {
+            "instance_name": "web01",
+            "target_resources_connection_info": {
+                "ip": "10.0.0.5",
+                "username": "root",
+                "password": "***",
+                "pkey": "***",
+            },
+            "osmorphing_connection_info": {
+                "minion_password": "***",
+                "certificates": {"client_key": "***"},
+            },
+            "volumes_info": [
+                {"disk_id": "disk1", "private_key": "***"}],
+        }
+
+        result = view_utils.redact_sensitive_info(task_info)
+
+        self.assertEqual(expected_result, result)
+
+    def test_redact_sensitive_info_does_not_mutate_input(self):
+        task_info = {"conn": {"pkey": "secret"}}
+
+        view_utils.redact_sensitive_info(task_info)
+
+        self.assertEqual({"conn": {"pkey": "secret"}}, task_info)
+
+    def test_redact_sensitive_info_keeps_empty_values(self):
+        task_info = {"conn": {"pkey": None, "password": ""}}
+
+        result = view_utils.redact_sensitive_info(task_info)
+
+        self.assertEqual(task_info, result)
+
+    def test_redact_sensitive_info_non_container(self):
+        self.assertEqual("value", view_utils.redact_sensitive_info("value"))
+        self.assertIsNone(view_utils.redact_sensitive_info(None))

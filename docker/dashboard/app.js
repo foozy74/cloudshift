@@ -1202,7 +1202,7 @@ async function refreshAllData() {
         const endpoints = await fetchList('endpoints');
         registeredEndpoints = endpoints;
         lastEndpointsData = endpoints;
-        const transfers = await fetchList('transfers?include_task_info=true');
+        const transfers = await fetchList('transfers');
         lastTransfersData = transfers;
         const services = await fetchList('services');
 

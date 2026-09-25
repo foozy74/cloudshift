@@ -103,6 +103,32 @@ class TransferViewTestCase(test_base.CoriolisApiViewsTestCase):
                 result
             )
 
+    @mock.patch.object(view_utils, 'format_opt')
+    def test_format_transfer_redacts_task_info(self, mock_format_opt):
+        mock_format_opt.return_value = {
+            "info": {
+                "instance1": {
+                    "target_resources_connection_info": {
+                        "ip": "10.0.0.5",
+                        "password": "engine_secret",
+                        "pkey": "private_key_data"}}}
+        }
+
+        expected_result = {
+            "executions": [],
+            "info": {
+                "instance1": {
+                    "target_resources_connection_info": {
+                        "ip": "10.0.0.5",
+                        "password": "***",
+                        "pkey": "***"}}}
+        }
+
+        result = transfer_view._format_transfer(
+            mock.sentinel.transfer, mock.sentinel.keys)
+
+        self.assertEqual(expected_result, result)
+
     def test_single(self):
         fun = getattr(transfer_view, 'single')
         self._single_view_test(fun, 'transfer')

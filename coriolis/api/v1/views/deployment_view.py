@@ -7,6 +7,9 @@ from coriolis.api.v1.views import utils as view_utils
 
 def _format_deployment(deployment, keys=None):
     deployment_dict = view_utils.format_opt(deployment, keys)
+    if 'info' in deployment_dict:
+        deployment_dict['info'] = view_utils.redact_sensitive_info(
+            deployment_dict['info'])
 
     if len(deployment_dict.get("executions", [])):
         execution = view.format_transfer_tasks_execution(
