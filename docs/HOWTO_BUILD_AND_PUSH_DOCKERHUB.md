@@ -123,29 +123,40 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ---
 
-## 6. Verifikation vor oder nach dem Push
+## 6. Verifikation vor dem Push (Pflicht)
 
-### 6.1 Lokale Architektur prüfen:
+Vor **jedem** Push, auch bei manuellen Builds:
+
 ```bash
-docker inspect thesolution/cloudshift:latest --format '{{.Architecture}} {{.Os}}'
-# Soll-Ausgabe: amd64 linux
+sh docker/verify-images.sh thesolution/cloudshift:<tag> thesolution/cloudshift-dashboard:<tag>
+# Soll-Ausgabe: OK: ... verified
 ```
 
-### 6.2 Remote-Manifest auf Docker Hub überprüfen:
+Das Skript bricht ab, wenn Geheimnisse oder lokale Dateien im Image stecken (`.git`, `.env`, `users.yaml`, `coriolis.conf`, TLS-Schlüssel, Artifactory-Zugangsdaten) oder Laufzeitdateien fehlen (`migrate.cfg`, Python-Module ohne `__init__.py`, Einstiegspunkte). Beides ist schon einmal passiert.
+
+Architektur prüfen:
 ```bash
-docker buildx imagetools inspect thesolution/cloudshift:latest
-# Soll-Ausgabe: Zeigt die unterstützten Architekturen (amd64 / arm64)
+docker buildx imagetools inspect thesolution/cloudshift:<tag>
+# Soll-Ausgabe: linux/amd64 und linux/arm64
 ```
 
 ---
 
-## 7. Automatisierung über GitHub Actions
+## 7. Release über GitHub Actions (Standardweg)
 
-Im Projekt ist unter `.github/workflows/docker-build.yml` ein automatischer Build-Workflow hinterlegt. 
+Releases werden nur noch über `.github/workflows/docker-build.yml` gebaut, manuelle Pushes sind die Ausnahme.
 
-Um diesen auf Docker Hub umzuleiten:
-1. Im GitHub Repository unter **Settings → Secrets and variables → Actions** folgende Secrets hinterlegen:
-   - `DOCKERHUB_USERNAME`: Euer Docker Hub Account-Name
-   - `DOCKERHUB_TOKEN`: Euer Docker Hub Personal Access Token
-2. Im Workflow `REGISTRY: docker.io` eintragen und via `docker/login-action@v3` authentifizieren.
-3. Jeder Git-Tag (z. B. `git tag v1.0.0 && git push origin v1.0.0`) baut und pusht automatisch Multi-Arch-Images zu Docker Hub.
+**Einmalig:** im GitHub-Repository unter **Settings → Secrets and variables → Actions** hinterlegen:
+- `DOCKERHUB_USERNAME`: Docker-Hub-Account
+- `DOCKERHUB_TOKEN`: Docker-Hub-Access-Token (Read/Write für `thesolution/*`)
+
+**Pro Release:**
+1. In `CHANGELOG.md` einen Abschnitt `## [1.4.0] - <Datum>` mit `### Upgrade-Hinweise` anlegen (neue Optionen, manuelle Schritte, Breaking Changes; `docker/upgrade.sh` zeigt ihn vor dem Update an).
+2. Tag setzen und pushen:
+   ```bash
+   git tag 1.4.0 && git push origin 1.4.0
+   ```
+3. Der Workflow baut amd64 zur Prüfung, führt `docker/verify-images.sh` aus und pusht erst danach Multi-Arch-Images mit den Tags `1.4.0`, `1.4` und `sha-<commit>` nach Docker Hub. `latest` wird bei jedem Release-Tag automatisch mitgesetzt.
+4. Server aktualisieren: `sh docker/upgrade.sh 1.4.0` (siehe [HOWTO_RUN_PODMAN_ROOTLESS_INTERNAL_REGISTRY.md](HOWTO_RUN_PODMAN_ROOTLESS_INTERNAL_REGISTRY.md), Abschnitt 9.1).
+
+Auf GitHub ist Artifactory nicht erreichbar; der Workflow baut deshalb mit `PIP_INDEX_URL=https://pypi.org/simple`.

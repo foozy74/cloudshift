@@ -200,7 +200,8 @@ podman-compose -f docker-compose.podman.yml up -d
 Hinweise:
 
 * `.env` wird aus dem Projektverzeichnis gelesen. Den Befehl deshalb immer aus `/appl/containers/cloudshift` starten.
-* Das Dashboard ist in `docker-compose.podman.yml` auf `cloudshift-dashboard:v1.0.0` fixiert. Empfohlen ist ein aktueller Tag (z. B. `1.3.0-beaf93a`). Ältere Images enthalten noch das früher veröffentlichte Zertifikat, das durch den `ssl/`-Mount aber überdeckt wird.
+* **Version:** `CLOUDSHIFT_VERSION` in `.env` legt fest, welche Image-Version läuft (Core und Dashboard). Für den Betrieb einen Release-Tag eintragen (z. B. `1.4.0`), nicht `latest`: nur so sind Updates und Rollbacks nachvollziehbar. `CLOUDSHIFT_REGISTRY` ist standardmäßig `docker.registry.it.internal`.
+* Alle Dienste außer `db-sync` haben `restart: unless-stopped`, Abstürze beim Start (z. B. wenn der Conductor noch nicht bereit ist) behebt Podman damit selbst.
 * Besonderheiten der Compose-Datei: Images von `docker.registry.it.internal`, keine Build-Schritte, `label:disable` bzw. `:z` für SELinux, Ports `443`, `8080`, `7667`, `13306`.
 
 ---
@@ -223,7 +224,7 @@ Danach im Browser `https://<VM-IP-oder-Hostname>/` öffnen und mit einem der neu
 
 ## 7. Autostart nach Reboot
 
-Die Compose-Datei setzt keine `restart:`-Policy. Damit der Stack nach einem Neustart der VM wieder startet, eine systemd-User-Unit anlegen (als `container`, Linger muss aktiv sein):
+Die `restart:`-Policy greift nur, solange Podman läuft; nach einem Neustart der VM startet rootless Podman die Container nicht von selbst. Dafür eine systemd-User-Unit anlegen (als `container`, Linger muss aktiv sein):
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -286,10 +287,31 @@ podman restart coriolis-conductor
 podman-compose -f docker-compose.podman.yml down
 podman-compose -f docker-compose.podman.yml up -d
 
-# Update auf neue Images
-podman-compose -f docker-compose.podman.yml pull
-podman-compose -f docker-compose.podman.yml up -d
 ```
+
+### 9.1 Update auf eine neue Version
+
+Updates immer mit `docker/upgrade.sh`, nie per `pull` + `up` von Hand:
+
+```bash
+cd /appl/containers/cloudshift
+git pull                                   # neue Vorlagen, Changelog und Skripte
+sh docker/upgrade.sh 1.4.0                 # Zielversion = Release-Tag
+```
+
+Das Skript
+1. prüft vorab: Images der Zielversion verfügbar, **keine laufende Migration** (`RUNNING`, `CANCELLING`, `AWAITING_MINION_ALLOCATIONS`), mindestens 2 GB frei, Compose-Konfiguration gültig,
+2. vergleicht `.env` und `docker/coriolis.conf` mit den Vorlagen (fehlende `.env`-Schlüssel brechen ab, fehlende Konfig-Optionen werden angezeigt) und zeigt die **Upgrade-Hinweise** aus `CHANGELOG.md`,
+3. sichert nach `backups/upgrade-<Zeit>-<alt>-to-<neu>/`: Datenbank-Dump, `.env`, `coriolis.conf`, `users.yaml`, und pinnt die laufenden Images unter `rollback-<Zeit>`,
+4. setzt `CLOUDSHIFT_VERSION`, erstellt den Stack neu (`db-sync` migriert die Datenbank),
+5. prüft: `db-sync` Exit 0, alle Container laufen, API und Dashboard antworten, API läuft mit der neuen Version,
+6. rollt bei einem Fehler **automatisch zurück**: alte Images, und bei geändertem Schema der Datenbank-Dump.
+
+Ohne Rückfrage (z. B. in Automatisierung): `sh docker/upgrade.sh 1.4.0 --yes`. Wartezeit für den Healthcheck: `HEALTH_TIMEOUT=600 sh docker/upgrade.sh …`.
+
+Ein **Downgrade** auf eine ältere Version ist nur über das Backup möglich (die ältere Version kennt neuere Migrationen nicht): `backups/…/database.sql.gz` einspielen und `CLOUDSHIFT_VERSION` auf die alte Version setzen.
+
+`backups/` enthält Zugangsdaten und Datenbank-Dumps: nur für `container` lesbar (700), alte Backups regelmäßig löschen.
 
 **Passwort ändern:** neue Werte in `.env` **und** `docker/coriolis.conf` eintragen. MariaDB übernimmt `DB_PASSWORD` nur bei der Erstinitialisierung, bei einer bestehenden Datenbank zusätzlich `ALTER USER 'coriolis'@'%' IDENTIFIED BY '<neu>';` ausführen. Danach den Stack neu starten.
 
