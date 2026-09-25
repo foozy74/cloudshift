@@ -22,9 +22,11 @@ Der Stack besteht aus folgenden Docker-Containern:
 - Mindestens 4 GB RAM für den vollständigen Stack
 - Konfiguration aus den Vorlagen anlegen (die echten Dateien sind nicht im Git) und alle `<CHANGE_ME>`/`<PBKDF2_HASH>` ersetzen:
   ```bash
+  cp .env.example .env && chmod 600 .env
   cp docker/coriolis.conf.example docker/coriolis.conf
   cp docker/users.yaml.example docker/users.yaml
   ```
+  `.env` enthält die Passwörter für MariaDB und RabbitMQ. Sie müssen zu den URLs in `docker/coriolis.conf` passen (`[database] connection`, `transport_url`).
   Fehlt eine der Dateien, legt Docker beim Start an ihrer Stelle ein leeres Verzeichnis an und die Dienste starten nicht.
 - TLS-Zertifikat für das Dashboard in `docker/dashboard/ssl/` (nicht im Git, wird zur Laufzeit eingebunden):
   - `cert.crt`: Serverzertifikat inkl. Zwischenzertifikat(e), Serverzertifikat zuerst
