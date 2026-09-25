@@ -27,7 +27,10 @@ WORKDIR /app
 # pip-artifactory during the RUN steps (they never land in a layer):
 #   docker build --secret id=artifactory_user,env=ARTIFACTORY_USER \
 #                --secret id=artifactory_pw,env=ARTIFACTORY_PW .
-RUN printf "[global]\nindex-url = https://artifactory.three.com/artifactory/api/pypi/pypi-remote/simple\n" > /etc/pip.conf
+# PIP_INDEX_URL can be overridden where Artifactory is not reachable
+# (e.g. GitHub Actions: --build-arg PIP_INDEX_URL=https://pypi.org/simple).
+ARG PIP_INDEX_URL=https://artifactory.three.com/artifactory/api/pypi/pypi-remote/simple
+RUN printf "[global]\nindex-url = %s\n" "$PIP_INDEX_URL" > /etc/pip.conf
 COPY docker/pip-artifactory.sh /usr/local/bin/pip-artifactory
 
 # Upgrade pip and tools
